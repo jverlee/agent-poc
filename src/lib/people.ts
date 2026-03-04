@@ -18,15 +18,15 @@ export const people: Person[] = [
     name: "Kelly",
     role: "Social Media Creator",
     avatar: "/avatars/kelly.jpg",
-    appName: "ai-vite-poc",
-    machineId: "17817d62b54248",
+    appName: "agent-b",
+    machineId: "17810e42f4e728",
   },
   {
     name: "Greg",
     role: "Analyst",
     avatar: "/avatars/greg.jpg",
-    appName: "manifest-1234",
-    machineId: "18577d5c01de28",
+    appName: "agent-c",
+    machineId: "78171d2f2d7798",
   },
 ];
 
