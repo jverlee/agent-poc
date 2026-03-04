@@ -59,6 +59,9 @@ app.prepare().then(() => {
  *   Browser sends JSON {cols, rows}          → proxy prepends 0x01 (RESIZE) → ttyd
  *   ttyd sends 0x00 + output bytes           → proxy strips prefix          → browser
  */
+const MAX_TTYD_RETRIES = 5;
+const TTYD_RETRY_DELAY_MS = 2000;
+
 function handleTerminalConnection(clientWs, query) {
   const { appName, machineId } = query;
 
@@ -83,50 +86,74 @@ function handleTerminalConnection(clientWs, query) {
     ttydUrl = `ws://${ttydHost}:${TTYD_PORT}/ws`;
   }
 
-  console.log(`[terminal] Connecting to ttyd at ${ttydUrl}`);
+  let ttydWs = null;
+  let attempt = 0;
+  // Queue messages from the browser while reconnecting
+  const pendingMessages = [];
 
-  const ttydWs = new WebSocket(ttydUrl, wsOptions.protocols, {
-    headers: wsOptions.headers,
-  });
-  let connected = false;
+  function connectTtyd() {
+    attempt++;
+    console.log(`[terminal] Connecting to ttyd at ${ttydUrl} (attempt ${attempt}/${MAX_TTYD_RETRIES})`);
 
-  ttydWs.on("open", () => {
-    connected = true;
-    console.log(`[terminal] Connected to ttyd for ${appName}/${machineId}`);
-    // ttyd requires an auth handshake before spawning the shell.
-    // The JSON_DATA message type in ttyd's protocol is '{' (0x7B),
-    // so sending raw JSON works — the opening brace IS the type indicator.
-    ttydWs.send('{"AuthToken":""}');
-  });
+    ttydWs = new WebSocket(ttydUrl, wsOptions.protocols, {
+      headers: wsOptions.headers,
+    });
 
-  ttydWs.on("message", (data) => {
-    if (clientWs.readyState !== WebSocket.OPEN) return;
+    ttydWs.on("open", () => {
+      console.log(`[terminal] Connected to ttyd for ${appName}/${machineId}`);
+      // ttyd requires an auth handshake before spawning the shell.
+      ttydWs.send('{"AuthToken":""}');
+      // Flush any queued messages
+      while (pendingMessages.length > 0) {
+        forwardToTtyd(pendingMessages.shift());
+      }
+    });
 
-    // ttyd sends binary frames: first byte is message type, rest is payload.
-    // Via Fly's HTTPS proxy, binary frames may arrive as text frames where
-    // the first character is the ASCII digit of the message type.
-    const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-    let msgType = buf[0];
+    ttydWs.on("message", (data) => {
+      if (clientWs.readyState !== WebSocket.OPEN) return;
 
-    // Normalize: if we got ASCII '0' (48), '1' (49), '2' (50), convert to 0/1/2
-    if (msgType >= 48 && msgType <= 50) {
-      msgType = msgType - 48;
-    }
+      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+      let msgType = buf[0];
 
-    console.log(`[terminal] ttyd→browser: type=${msgType} len=${buf.length} raw0=${buf[0]} preview=${buf.slice(0, 20).toString("hex")}`);
+      if (msgType >= 48 && msgType <= 50) {
+        msgType = msgType - 48;
+      }
 
-    if (msgType === 0) {
-      // OUTPUT — forward terminal data to browser
-      clientWs.send(buf.slice(1).toString("utf-8"));
-    }
-    // Type 1 (set window title) and 2 (set preferences) are ignored
-  });
+      console.log(`[terminal] ttyd→browser: type=${msgType} len=${buf.length} raw0=${buf[0]} preview=${buf.slice(0, 20).toString("hex")}`);
 
-  clientWs.on("message", (msg) => {
-    if (ttydWs.readyState !== WebSocket.OPEN) return;
+      if (msgType === 0) {
+        clientWs.send(buf.slice(1).toString("utf-8"));
+      }
+    });
 
-    const str = msg.toString();
-    console.log(`[terminal] browser→ttyd: ${JSON.stringify(str).slice(0, 100)}`);
+    ttydWs.on("close", () => {
+      console.log(`[terminal] ttyd disconnected (${appName}/${machineId})`);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send("\r\n\x1b[1;31mTerminal session ended\x1b[0m\r\n");
+        clientWs.close();
+      }
+    });
+
+    ttydWs.on("error", (err) => {
+      console.error(`[terminal] ttyd connection error (attempt ${attempt}): ${err.message}`);
+      if (attempt < MAX_TTYD_RETRIES && clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(
+          `\r\n\x1b[1;33mConnection attempt ${attempt} failed, retrying in ${TTYD_RETRY_DELAY_MS / 1000}s...\x1b[0m\r\n`
+        );
+        // Remove listeners from the failed WebSocket to prevent the close handler from firing
+        ttydWs.removeAllListeners();
+        setTimeout(connectTtyd, TTYD_RETRY_DELAY_MS);
+      } else if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(
+          `\r\n\x1b[1;31mFailed to connect to terminal after ${MAX_TTYD_RETRIES} attempts: ${err.message}\x1b[0m\r\n`
+        );
+        clientWs.close();
+      }
+    });
+  }
+
+  function forwardToTtyd(str) {
+    if (!ttydWs || ttydWs.readyState !== WebSocket.OPEN) return;
 
     // Check if this is a resize message (JSON with cols/rows)
     try {
@@ -142,11 +169,10 @@ function handleTerminalConnection(clientWs, query) {
           rows: parsed.rows,
         });
         if (isLocal) {
-          // Text frame: '1' + JSON
           ttydWs.send("1" + resizeJson);
         } else {
           const buf = Buffer.alloc(1 + Buffer.byteLength(resizeJson));
-          buf[0] = 1; // MSG_RESIZE_TERMINAL
+          buf[0] = 1;
           buf.write(resizeJson, 1);
           ttydWs.send(buf);
         }
@@ -156,38 +182,32 @@ function handleTerminalConnection(clientWs, query) {
       // Not JSON — treat as terminal input
     }
 
-    // Regular terminal input
     if (isLocal) {
-      // Text frame: '0' + input
       ttydWs.send("0" + str);
     } else {
       const buf = Buffer.alloc(1 + Buffer.byteLength(str));
-      buf[0] = 0; // MSG_INPUT
+      buf[0] = 0;
       buf.write(str, 1);
       ttydWs.send(buf);
+    }
+  }
+
+  clientWs.on("message", (msg) => {
+    const str = msg.toString();
+    console.log(`[terminal] browser→ttyd: ${JSON.stringify(str).slice(0, 100)}`);
+
+    if (ttydWs && ttydWs.readyState === WebSocket.OPEN) {
+      forwardToTtyd(str);
+    } else {
+      // Queue while (re)connecting
+      pendingMessages.push(str);
     }
   });
 
   clientWs.on("close", () => {
     console.log(`[terminal] Client disconnected (${appName}/${machineId})`);
-    if (ttydWs.readyState === WebSocket.OPEN) ttydWs.close();
+    if (ttydWs && ttydWs.readyState === WebSocket.OPEN) ttydWs.close();
   });
 
-  ttydWs.on("close", () => {
-    console.log(`[terminal] ttyd disconnected (${appName}/${machineId})`);
-    if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send("\r\n\x1b[1;31mTerminal session ended\x1b[0m\r\n");
-      clientWs.close();
-    }
-  });
-
-  ttydWs.on("error", (err) => {
-    console.error(`[terminal] ttyd connection error: ${err.message}`);
-    if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send(
-        `\r\n\x1b[1;31mFailed to connect to terminal: ${err.message}\x1b[0m\r\n`
-      );
-      clientWs.close();
-    }
-  });
+  connectTtyd();
 }
