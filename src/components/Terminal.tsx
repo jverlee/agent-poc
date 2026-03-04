@@ -8,9 +8,10 @@ import "@xterm/xterm/css/xterm.css";
 interface TerminalProps {
   appName: string;
   machineId: string;
+  isActive?: boolean;
 }
 
-export default function Terminal({ appName, machineId }: TerminalProps) {
+export default function Terminal({ appName, machineId, isActive = true }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -98,6 +99,12 @@ export default function Terminal({ appName, machineId }: TerminalProps) {
       term.dispose();
     };
   }, [appName, machineId]);
+
+  useEffect(() => {
+    if (isActive && fitRef.current) {
+      fitRef.current.fit();
+    }
+  }, [isActive]);
 
   return (
     <div

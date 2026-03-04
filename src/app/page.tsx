@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import ConnectionForm from "@/components/ConnectionForm";
 import { StatusBadge } from "@/components/status-badge";
 import { useStatuses } from "@/components/status-provider";
-import { findPerson } from "@/lib/people";
+import { people, findPerson } from "@/lib/people";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), { ssr: false });
 
@@ -113,7 +113,24 @@ function HomeContent() {
         </div>
       )}
       <div className="min-h-0 flex-1">
-        <Terminal appName={appName} machineId={machineId} />
+        {people.map((person) => (
+          <div
+            key={`${person.appName}-${person.machineId}`}
+            className="h-full w-full"
+            style={{
+              display:
+                person.appName === appName && person.machineId === machineId
+                  ? "block"
+                  : "none",
+            }}
+          >
+            <Terminal
+              appName={person.appName}
+              machineId={person.machineId}
+              isActive={person.appName === appName && person.machineId === machineId}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );
