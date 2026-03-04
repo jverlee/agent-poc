@@ -93,6 +93,10 @@ function handleTerminalConnection(clientWs, query) {
   ttydWs.on("open", () => {
     connected = true;
     console.log(`[terminal] Connected to ttyd for ${appName}/${machineId}`);
+    // ttyd requires an auth handshake before spawning the shell.
+    // The JSON_DATA message type in ttyd's protocol is '{' (0x7B),
+    // so sending raw JSON works — the opening brace IS the type indicator.
+    ttydWs.send('{"AuthToken":""}');
   });
 
   ttydWs.on("message", (data) => {
