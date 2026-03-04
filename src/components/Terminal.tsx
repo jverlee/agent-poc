@@ -14,8 +14,7 @@ export default function Terminal({ appName, machineId }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
-  const lineRef = useRef("");
-  const busyRef = useRef(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -41,88 +40,62 @@ export default function Terminal({ appName, machineId }: TerminalProps) {
     termRef.current = term;
     fitRef.current = fit;
 
-    term.writeln(`\x1b[1;36mConnected to ${appName} / ${machineId}\x1b[0m`);
     term.writeln(
-      "\x1b[90mEach command runs in a fresh context. Use sh -c 'cmd1 && cmd2' to chain commands.\x1b[0m"
+      `\x1b[1;36mConnecting to ${appName} / ${machineId}...\x1b[0m`
     );
-    term.writeln("");
-    writePrompt(term);
 
-    term.onKey(({ key, domEvent }) => {
-      if (busyRef.current) return;
+    // Build WebSocket URL
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/api/terminal?appName=${encodeURIComponent(appName)}&machineId=${encodeURIComponent(machineId)}`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
 
-      if (domEvent.key === "Enter") {
-        term.write("\r\n");
-        const cmd = lineRef.current.trim();
-        lineRef.current = "";
-        if (cmd) {
-          execCommand(term, cmd);
-        } else {
-          writePrompt(term);
-        }
-      } else if (domEvent.key === "Backspace") {
-        if (lineRef.current.length > 0) {
-          lineRef.current = lineRef.current.slice(0, -1);
-          term.write("\b \b");
-        }
-      } else if (
-        key.length === 1 &&
-        !domEvent.ctrlKey &&
-        !domEvent.altKey &&
-        !domEvent.metaKey
-      ) {
-        lineRef.current += key;
-        term.write(key);
+    ws.onopen = () => {
+      term.writeln("\x1b[1;32mConnected\x1b[0m");
+      // Send initial terminal size
+      ws.send(JSON.stringify({ cols: term.cols, rows: term.rows }));
+    };
+
+    ws.onmessage = (event) => {
+      term.write(event.data);
+    };
+
+    ws.onclose = () => {
+      term.writeln("\r\n\x1b[1;31mDisconnected\x1b[0m");
+    };
+
+    ws.onerror = () => {
+      term.writeln("\r\n\x1b[1;31mWebSocket error\x1b[0m");
+    };
+
+    // Forward user input to WebSocket
+    const dataDisposable = term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
       }
     });
 
-    const onResize = () => fit.fit();
-    window.addEventListener("resize", onResize);
+    // Handle terminal resize
+    const resizeDisposable = term.onResize(({ cols, rows }) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ cols, rows }));
+      }
+    });
+
+    // Re-fit on window resize
+    const onWindowResize = () => {
+      fit.fit();
+    };
+    window.addEventListener("resize", onWindowResize);
 
     return () => {
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("resize", onWindowResize);
+      dataDisposable.dispose();
+      resizeDisposable.dispose();
+      ws.close();
       term.dispose();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appName, machineId]);
-
-  function writePrompt(term: XTerm) {
-    term.write("\x1b[1;32m$ \x1b[0m");
-  }
-
-  async function execCommand(term: XTerm, command: string) {
-    busyRef.current = true;
-    try {
-      const res = await fetch("/api/exec", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appName, machineId, command }),
-      });
-      const data = await res.json();
-
-      if (data.error) {
-        term.writeln(`\x1b[1;31m${data.error}\x1b[0m`);
-      } else {
-        if (data.stdout) {
-          term.write(data.stdout.replace(/\n/g, "\r\n"));
-          if (!data.stdout.endsWith("\n")) term.write("\r\n");
-        }
-        if (data.stderr) {
-          term.write(`\x1b[31m${data.stderr.replace(/\n/g, "\r\n")}\x1b[0m`);
-          if (!data.stderr.endsWith("\n")) term.write("\r\n");
-        }
-        if (data.exit_code !== 0 && data.exit_code !== undefined) {
-          term.writeln(`\x1b[90m[exit code: ${data.exit_code}]\x1b[0m`);
-        }
-      }
-    } catch (err) {
-      term.writeln(
-        `\x1b[1;31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m`
-      );
-    }
-    writePrompt(term);
-    busyRef.current = false;
-  }
 
   return (
     <div
