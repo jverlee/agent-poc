@@ -28,6 +28,13 @@ export const people: Person[] = [
     appName: "agent-c",
     machineId: "78171d2f2d7798",
   },
+  {
+    name: "Alex",
+    role: "Designer",
+    avatar: "/avatars/alex.jpg",
+    appName: "agent-d",
+    machineId: "148e604dfd6238",
+  },
 ];
 
 export function findPerson(appName: string, machineId: string): Person | undefined {
