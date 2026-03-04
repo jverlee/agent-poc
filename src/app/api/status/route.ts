@@ -40,7 +40,13 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await res.json();
-    return NextResponse.json({ state: data.state });
+    const guest = data.config?.guest;
+    return NextResponse.json({
+      state: data.state,
+      cpus: guest?.cpus ?? null,
+      cpuKind: guest?.cpu_kind ?? null,
+      memoryMb: guest?.memory_mb ?? null,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: `Failed to reach Fly.io API: ${err instanceof Error ? err.message : String(err)}` },
