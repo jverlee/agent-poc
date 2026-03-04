@@ -44,38 +44,22 @@ export default function Terminal({ appName, machineId }: TerminalProps) {
       `\x1b[1;36mConnecting to ${appName} / ${machineId}...\x1b[0m`
     );
 
-    // Connect directly to ttyd on the Fly machine
-    const wsUrl = `wss://${appName}.fly.dev/ws`;
-    const ws = new WebSocket(wsUrl, ["tty"]);
-    ws.binaryType = "arraybuffer";
+    // Connect through the server-side WebSocket proxy which handles
+    // ttyd binary protocol translation and Fly machine targeting
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/terminal?appName=${encodeURIComponent(appName)}&machineId=${encodeURIComponent(machineId)}`;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       term.writeln("\x1b[1;32mConnected\x1b[0m");
-      // Send initial terminal size (ttyd binary protocol: type 1 = resize)
-      const resizeJson = JSON.stringify({
-        columns: term.cols,
-        rows: term.rows,
-      });
-      const resizeBuf = new Uint8Array(1 + resizeJson.length);
-      resizeBuf[0] = 1; // MSG_RESIZE_TERMINAL
-      for (let i = 0; i < resizeJson.length; i++) {
-        resizeBuf[i + 1] = resizeJson.charCodeAt(i);
-      }
-      ws.send(resizeBuf.buffer);
+      // Send initial terminal size as JSON (proxy translates to ttyd protocol)
+      ws.send(JSON.stringify({ cols: term.cols, rows: term.rows }));
     };
 
     ws.onmessage = (event) => {
-      // ttyd binary protocol: first byte is message type
-      const buf = new Uint8Array(event.data);
-      const msgType = buf[0];
-
-      if (msgType === 0) {
-        // OUTPUT — terminal data
-        const text = new TextDecoder().decode(buf.slice(1));
-        term.write(text);
-      }
-      // Type 1 (set window title) and 2 (set preferences) are ignored
+      // Proxy strips ttyd framing and forwards plain text output
+      term.write(event.data);
     };
 
     ws.onclose = () => {
@@ -86,27 +70,17 @@ export default function Terminal({ appName, machineId }: TerminalProps) {
       term.writeln("\r\n\x1b[1;31mWebSocket error\x1b[0m");
     };
 
-    // Forward user input to WebSocket (ttyd binary protocol: type 0 = input)
+    // Forward user input as plain text (proxy translates to ttyd protocol)
     const dataDisposable = term.onData((data) => {
       if (ws.readyState === WebSocket.OPEN) {
-        const encoded = new TextEncoder().encode(data);
-        const inputBuf = new Uint8Array(1 + encoded.length);
-        inputBuf[0] = 0; // MSG_INPUT
-        inputBuf.set(encoded, 1);
-        ws.send(inputBuf.buffer);
+        ws.send(data);
       }
     });
 
-    // Handle terminal resize
+    // Handle terminal resize — send JSON (proxy translates to ttyd protocol)
     const resizeDisposable = term.onResize(({ cols, rows }) => {
       if (ws.readyState === WebSocket.OPEN) {
-        const resizeJson = JSON.stringify({ columns: cols, rows });
-        const resizeBuf = new Uint8Array(1 + resizeJson.length);
-        resizeBuf[0] = 1; // MSG_RESIZE_TERMINAL
-        for (let i = 0; i < resizeJson.length; i++) {
-          resizeBuf[i + 1] = resizeJson.charCodeAt(i);
-        }
-        ws.send(resizeBuf.buffer);
+        ws.send(JSON.stringify({ cols, rows }));
       }
     });
 
