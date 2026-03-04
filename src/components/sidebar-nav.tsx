@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { people } from "@/lib/people";
 import { StatusBadge } from "@/components/status-badge";
@@ -20,7 +21,7 @@ export function SidebarNav() {
 
         return (
           <li key={person.name}>
-            <a
+            <Link
               href={`/?app=${person.appName}&machine=${person.machineId}`}
               className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
                 isActive
@@ -39,7 +40,7 @@ export function SidebarNav() {
                 <span>{person.name}</span>
                 <span className="text-xs font-normal text-zinc-500 dark:text-zinc-500">{person.role}</span>
               </div>
-            </a>
+            </Link>
           </li>
         );
       })}
