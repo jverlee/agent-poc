@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { people } from "@/lib/people";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,30 +34,20 @@ export default function RootLayout({
               Workmate
             </div>
             <ul className="flex flex-col gap-1 px-3">
-              <li>
-                <a
-                  href="/"
-                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Terminal
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/dashboard"
-                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Dashboard
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/settings"
-                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Settings
-                </a>
-              </li>
+              {people.map((person) => (
+                <li key={person.name}>
+                  <a
+                    href={`/?app=${person.appName}&machine=${person.machineId}`}
+                    className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    <img src={person.avatar} alt={person.name} className="h-9 w-9 shrink-0 rounded-full object-cover" />
+                    <div className="flex flex-col">
+                      <span>{person.name}</span>
+                      <span className="text-xs font-normal text-zinc-500 dark:text-zinc-500">{person.role}</span>
+                    </div>
+                  </a>
+                </li>
+              ))}
             </ul>
           </nav>
           <main className="flex-1 overflow-y-auto p-8">
