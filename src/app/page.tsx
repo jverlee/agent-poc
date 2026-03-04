@@ -10,8 +10,8 @@ const Terminal = dynamic(() => import("@/components/Terminal"), { ssr: false });
 
 function HomeContent() {
   const searchParams = useSearchParams();
-  const appName = searchParams.get("app") || "openclaw-uqbysq";
-  const machineId = searchParams.get("machine") || "784625ef2d5748";
+  const appName = searchParams.get("app") || "agent-a";
+  const machineId = searchParams.get("machine") || "185924c433dd78";
 
   const person = findPerson(appName, machineId);
 

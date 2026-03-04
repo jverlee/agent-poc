@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
-import { people } from "@/lib/people";
+import { SidebarNav } from "@/components/sidebar-nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,22 +34,9 @@ export default function RootLayout({
             <div className="p-6 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
               Workmate
             </div>
-            <ul className="flex flex-col gap-1 px-3">
-              {people.map((person) => (
-                <li key={person.name}>
-                  <a
-                    href={`/?app=${person.appName}&machine=${person.machineId}`}
-                    className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  >
-                    <img src={person.avatar} alt={person.name} className="h-9 w-9 shrink-0 rounded-full object-cover" />
-                    <div className="flex flex-col">
-                      <span>{person.name}</span>
-                      <span className="text-xs font-normal text-zinc-500 dark:text-zinc-500">{person.role}</span>
-                    </div>
-                  </a>
-                </li>
-              ))}
-            </ul>
+            <Suspense>
+              <SidebarNav />
+            </Suspense>
           </nav>
           <main className="flex-1 overflow-y-auto p-8">
             {children}
