@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SidebarNav } from "@/components/sidebar-nav";
+import { RightSidebar } from "@/components/right-sidebar";
 import { StatusProvider } from "@/components/status-provider";
 import "./globals.css";
 
@@ -43,6 +44,7 @@ export default function RootLayout({
           <main className="flex-1 overflow-y-auto p-8">
             {children}
           </main>
+          <RightSidebar />
         </div>
         </StatusProvider>
       </body>
