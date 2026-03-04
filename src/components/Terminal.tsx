@@ -85,6 +85,15 @@ export default function Terminal({ appName, machineId, isActive = true }: Termin
       }
     });
 
+    // Listen for programmatic command injection from shortcuts
+    const onSendCommand = (e: Event) => {
+      const command = (e as CustomEvent<string>).detail;
+      if (ws.readyState === WebSocket.OPEN && command) {
+        ws.send(command + "\r");
+      }
+    };
+    window.addEventListener("terminal-send-command", onSendCommand);
+
     // Re-fit on window resize
     const onWindowResize = () => {
       fit.fit();
@@ -92,6 +101,7 @@ export default function Terminal({ appName, machineId, isActive = true }: Termin
     window.addEventListener("resize", onWindowResize);
 
     return () => {
+      window.removeEventListener("terminal-send-command", onSendCommand);
       window.removeEventListener("resize", onWindowResize);
       dataDisposable.dispose();
       resizeDisposable.dispose();
