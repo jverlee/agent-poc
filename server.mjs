@@ -1,7 +1,24 @@
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { parse } from "node:url";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
+
+// Load .env.local if it exists (for local dev overrides like TTYD_HOST)
+try {
+  const envFile = readFileSync(".env.local", "utf-8");
+  for (const line of envFile.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const idx = trimmed.indexOf("=");
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim();
+    const val = trimmed.slice(idx + 1).trim();
+    if (!process.env[key]) process.env[key] = val;
+  }
+} catch {
+  // No .env.local — that's fine
+}
 
 const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
@@ -23,9 +40,9 @@ app.prepare().then(() => {
       wss.handleUpgrade(req, socket, head, (clientWs) => {
         handleTerminalConnection(clientWs, query);
       });
-    } else {
-      socket.destroy();
     }
+    // Non-terminal upgrades (e.g. Next.js HMR) are left unhandled
+    // so the default server behavior can process them
   });
 
   const port = parseInt(process.env.PORT || "3000", 10);
@@ -52,16 +69,25 @@ function handleTerminalConnection(clientWs, query) {
   }
 
   // Build ttyd WebSocket URL.
-  // Internal Fly.io DNS: <machineId>.vm.<appName>.internal:7681
-  // Override with TTYD_HOST for local dev (e.g. "localhost" when using `fly proxy`).
-  const ttydHost =
-    process.env.TTYD_HOST ||
-    `${machineId}.vm.${appName}.internal`;
-  const ttydUrl = `ws://${ttydHost}:${TTYD_PORT}/ws`;
+  // In production (on Fly): use internal DNS <machineId>.vm.<appName>.internal:7681
+  // Locally: use Fly's public proxy wss://<appName>.fly.dev/ws
+  const isLocal = dev || process.env.TTYD_USE_PUBLIC_PROXY === "true";
+  let ttydUrl;
+  let wsOptions = { protocols: ["tty"] };
+
+  if (isLocal) {
+    ttydUrl = `wss://${appName}.fly.dev/ws`;
+    wsOptions.headers = { "fly-force-instance-id": machineId };
+  } else {
+    const ttydHost = `${machineId}.vm.${appName}.internal`;
+    ttydUrl = `ws://${ttydHost}:${TTYD_PORT}/ws`;
+  }
 
   console.log(`[terminal] Connecting to ttyd at ${ttydUrl}`);
 
-  const ttydWs = new WebSocket(ttydUrl, ["tty"]);
+  const ttydWs = new WebSocket(ttydUrl, wsOptions.protocols, {
+    headers: wsOptions.headers,
+  });
   let connected = false;
 
   ttydWs.on("open", () => {
@@ -72,8 +98,18 @@ function handleTerminalConnection(clientWs, query) {
   ttydWs.on("message", (data) => {
     if (clientWs.readyState !== WebSocket.OPEN) return;
 
+    // ttyd sends binary frames: first byte is message type, rest is payload.
+    // Via Fly's HTTPS proxy, binary frames may arrive as text frames where
+    // the first character is the ASCII digit of the message type.
     const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-    const msgType = buf[0];
+    let msgType = buf[0];
+
+    // Normalize: if we got ASCII '0' (48), '1' (49), '2' (50), convert to 0/1/2
+    if (msgType >= 48 && msgType <= 50) {
+      msgType = msgType - 48;
+    }
+
+    console.log(`[terminal] ttyd→browser: type=${msgType} len=${buf.length} raw0=${buf[0]} preview=${buf.slice(0, 20).toString("hex")}`);
 
     if (msgType === 0) {
       // OUTPUT — forward terminal data to browser
@@ -86,6 +122,7 @@ function handleTerminalConnection(clientWs, query) {
     if (ttydWs.readyState !== WebSocket.OPEN) return;
 
     const str = msg.toString();
+    console.log(`[terminal] browser→ttyd: ${JSON.stringify(str).slice(0, 100)}`);
 
     // Check if this is a resize message (JSON with cols/rows)
     try {
@@ -100,10 +137,15 @@ function handleTerminalConnection(clientWs, query) {
           columns: parsed.cols,
           rows: parsed.rows,
         });
-        const buf = Buffer.alloc(1 + Buffer.byteLength(resizeJson));
-        buf[0] = 1; // MSG_RESIZE_TERMINAL
-        buf.write(resizeJson, 1);
-        ttydWs.send(buf);
+        if (isLocal) {
+          // Text frame: '1' + JSON
+          ttydWs.send("1" + resizeJson);
+        } else {
+          const buf = Buffer.alloc(1 + Buffer.byteLength(resizeJson));
+          buf[0] = 1; // MSG_RESIZE_TERMINAL
+          buf.write(resizeJson, 1);
+          ttydWs.send(buf);
+        }
         return;
       }
     } catch {
@@ -111,10 +153,15 @@ function handleTerminalConnection(clientWs, query) {
     }
 
     // Regular terminal input
-    const buf = Buffer.alloc(1 + Buffer.byteLength(str));
-    buf[0] = 0; // MSG_INPUT
-    buf.write(str, 1);
-    ttydWs.send(buf);
+    if (isLocal) {
+      // Text frame: '0' + input
+      ttydWs.send("0" + str);
+    } else {
+      const buf = Buffer.alloc(1 + Buffer.byteLength(str));
+      buf[0] = 0; // MSG_INPUT
+      buf.write(str, 1);
+      ttydWs.send(buf);
+    }
   });
 
   clientWs.on("close", () => {

@@ -11,8 +11,8 @@ export const people: Person[] = [
     name: "Sam",
     role: "CX Specialist",
     avatar: "/avatars/sam.jpg",
-    appName: "openclaw-uqbysq",
-    machineId: "784625ef2d5748",
+    appName: "agent-a",
+    machineId: "185924c433dd78",
   },
   {
     name: "Kelly",
