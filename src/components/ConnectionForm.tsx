@@ -4,8 +4,6 @@ interface ConnectionFormProps {
   appName: string;
   machineId: string;
   machineState?: string | null;
-  onRestart?: () => void;
-  restarting?: boolean;
   cpus?: number | null;
   cpuKind?: string | null;
   memoryMb?: number | null;
@@ -23,8 +21,6 @@ export default function ConnectionForm({
   appName,
   machineId,
   machineState,
-  onRestart,
-  restarting,
   cpus,
   cpuKind,
   memoryMb,
@@ -46,15 +42,6 @@ export default function ConnectionForm({
           <span className="text-xs text-zinc-500">
             {cpus} {cpuKind ?? ""} vCPU{cpus > 1 ? "s" : ""} · {formatMemory(memoryMb)}
           </span>
-        )}
-        {onRestart && (
-          <button
-            onClick={onRestart}
-            disabled={restarting}
-            className="rounded-md border border-zinc-700 px-3 py-1 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
-          >
-            {restarting ? "Restarting…" : "Force Restart"}
-          </button>
         )}
       </div>
     </div>

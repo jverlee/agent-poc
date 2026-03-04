@@ -18,7 +18,6 @@ function HomeContent() {
   const person = findPerson(appName, machineId);
 
   const { setAgentStatus } = useStatuses();
-  const [restarting, setRestarting] = useState(false);
   const [machineState, setMachineState] = useState<string | null>(null);
   const [machineSpecs, setMachineSpecs] = useState<{
     cpus: number | null;
@@ -58,32 +57,6 @@ function HomeContent() {
     return () => clearInterval(interval);
   }, [appName, machineId, fetchStatus]);
 
-  async function handleRestart() {
-    if (restarting) return;
-    if (!confirm("Force restart this machine? This will interrupt any running processes.")) return;
-
-    setRestarting(true);
-    try {
-      const res = await fetch("/api/restart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appName, machineId }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        alert(`Restart failed: ${data.error}`);
-      } else {
-        setMachineState(null);
-        setTimeout(fetchStatus, 1000);
-        setTimeout(fetchStatus, 3000);
-      }
-    } catch (err) {
-      alert(`Restart failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setRestarting(false);
-    }
-  }
-
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       {/* Selected person header */}
@@ -108,8 +81,6 @@ function HomeContent() {
               appName={appName}
               machineId={machineId}
               machineState={machineState}
-              onRestart={handleRestart}
-              restarting={restarting}
               cpus={machineSpecs.cpus}
               cpuKind={machineSpecs.cpuKind}
               memoryMb={machineSpecs.memoryMb}
@@ -123,8 +94,6 @@ function HomeContent() {
             appName={appName}
             machineId={machineId}
             machineState={machineState}
-            onRestart={handleRestart}
-            restarting={restarting}
             cpus={machineSpecs.cpus}
             cpuKind={machineSpecs.cpuKind}
             memoryMb={machineSpecs.memoryMb}
