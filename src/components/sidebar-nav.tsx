@@ -2,11 +2,14 @@
 
 import { useSearchParams } from "next/navigation";
 import { people } from "@/lib/people";
+import { StatusBadge } from "@/components/status-badge";
+import { useStatuses } from "@/components/status-provider";
 
 export function SidebarNav() {
   const searchParams = useSearchParams();
   const currentApp = searchParams.get("app");
   const currentMachine = searchParams.get("machine");
+  const { statuses } = useStatuses();
 
   return (
     <ul className="flex flex-col gap-1 px-3">
@@ -25,7 +28,13 @@ export function SidebarNav() {
                   : "text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
               }`}
             >
-              <img src={person.avatar} alt={person.name} className="h-9 w-9 shrink-0 rounded-full object-cover" />
+              <div className="relative shrink-0">
+                <img src={person.avatar} alt={person.name} className="h-9 w-9 rounded-full object-cover" />
+                <StatusBadge
+                  state={statuses[`${person.appName}:${person.machineId}`]}
+                  size="sm"
+                />
+              </div>
               <div className="flex flex-col">
                 <span>{person.name}</span>
                 <span className="text-xs font-normal text-zinc-500 dark:text-zinc-500">{person.role}</span>

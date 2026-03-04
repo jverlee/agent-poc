@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import ConnectionForm from "@/components/ConnectionForm";
+import { StatusBadge } from "@/components/status-badge";
+import { useStatuses } from "@/components/status-provider";
 import { findPerson } from "@/lib/people";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), { ssr: false });
@@ -15,6 +17,7 @@ function HomeContent() {
 
   const person = findPerson(appName, machineId);
 
+  const { setAgentStatus } = useStatuses();
   const [restarting, setRestarting] = useState(false);
   const [machineState, setMachineState] = useState<string | null>(null);
 
@@ -26,11 +29,14 @@ function HomeContent() {
         body: JSON.stringify({ appName, machineId }),
       });
       const data = await res.json();
-      if (data.state) setMachineState(data.state);
+      if (data.state) {
+        setMachineState(data.state);
+        setAgentStatus(appName, machineId, data.state);
+      }
     } catch {
       // silently ignore polling errors
     }
-  }, [appName, machineId]);
+  }, [appName, machineId, setAgentStatus]);
 
   useEffect(() => {
     setMachineState(null);
@@ -70,11 +76,14 @@ function HomeContent() {
       {/* Selected person header */}
       {person && (
         <div className="mb-6 flex items-center gap-4 shrink-0">
-          <img
-            src={person.avatar}
-            alt={person.name}
-            className="h-14 w-14 rounded-full object-cover ring-2 ring-zinc-200 dark:ring-zinc-700"
-          />
+          <div className="relative shrink-0">
+            <img
+              src={person.avatar}
+              alt={person.name}
+              className="h-14 w-14 rounded-full object-cover ring-2 ring-zinc-200 dark:ring-zinc-700"
+            />
+            <StatusBadge state={machineState} />
+          </div>
           <div>
             <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
               {person.name}
