@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Workmate",
-  description: "Workmate",
+  description: "Interactive terminal for Fly.io machines",
 };
 
 export default function RootLayout({
@@ -38,7 +38,7 @@ export default function RootLayout({
                   href="/"
                   className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
-                  Home
+                  Terminal
                 </a>
               </li>
               <li>
