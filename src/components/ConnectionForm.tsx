@@ -28,22 +28,15 @@ export default function ConnectionForm({
   const hasSpecs = cpus != null && memoryMb != null;
 
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-2 text-sm text-zinc-400">
-        <span>
-          {appName} / {machineId}
+    <div className="flex flex-col items-end gap-0.5">
+      <span className="text-sm text-zinc-400">
+        {appName} / {machineId}
+      </span>
+      {hasSpecs && (
+        <span className="text-xs text-zinc-500">
+          {cpus} {cpuKind ?? ""} vCPU{cpus > 1 ? "s" : ""} · {formatMemory(memoryMb)}
         </span>
-        {machineState && (
-          <span className="text-xs text-zinc-500">{machineState}</span>
-        )}
-      </div>
-      <div className="flex items-center gap-3">
-        {hasSpecs && (
-          <span className="text-xs text-zinc-500">
-            {cpus} {cpuKind ?? ""} vCPU{cpus > 1 ? "s" : ""} · {formatMemory(memoryMb)}
-          </span>
-        )}
-      </div>
+      )}
     </div>
   );
 }
