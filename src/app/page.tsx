@@ -20,6 +20,11 @@ function HomeContent() {
   const { setAgentStatus } = useStatuses();
   const [restarting, setRestarting] = useState(false);
   const [machineState, setMachineState] = useState<string | null>(null);
+  const [machineSpecs, setMachineSpecs] = useState<{
+    cpus: number | null;
+    cpuKind: string | null;
+    memoryMb: number | null;
+  }>({ cpus: null, cpuKind: null, memoryMb: null });
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -33,6 +38,13 @@ function HomeContent() {
         setMachineState(data.state);
         setAgentStatus(appName, machineId, data.state);
       }
+      if (data.cpus != null) {
+        setMachineSpecs({
+          cpus: data.cpus,
+          cpuKind: data.cpuKind,
+          memoryMb: data.memoryMb,
+        });
+      }
     } catch {
       // silently ignore polling errors
     }
@@ -40,6 +52,7 @@ function HomeContent() {
 
   useEffect(() => {
     setMachineState(null);
+    setMachineSpecs({ cpus: null, cpuKind: null, memoryMb: null });
     fetchStatus();
     const interval = setInterval(fetchStatus, 5000);
     return () => clearInterval(interval);
@@ -97,6 +110,9 @@ function HomeContent() {
               machineState={machineState}
               onRestart={handleRestart}
               restarting={restarting}
+              cpus={machineSpecs.cpus}
+              cpuKind={machineSpecs.cpuKind}
+              memoryMb={machineSpecs.memoryMb}
             />
           </div>
         </div>
@@ -109,6 +125,9 @@ function HomeContent() {
             machineState={machineState}
             onRestart={handleRestart}
             restarting={restarting}
+            cpus={machineSpecs.cpus}
+            cpuKind={machineSpecs.cpuKind}
+            memoryMb={machineSpecs.memoryMb}
           />
         </div>
       )}
