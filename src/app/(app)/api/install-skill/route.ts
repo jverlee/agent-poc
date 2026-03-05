@@ -1,25 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
-import { people } from "@/lib/people";
+import { getMachineById } from "@/lib/supabase/machines";
 import { execSSHCommand } from "@/lib/ssh";
 
 const SKILLS_DIR = path.resolve(process.cwd(), "skills");
 
 export async function POST(req: NextRequest) {
   try {
-    const { skill, personIndex } = await req.json();
+    const { skill, machineId } = await req.json();
 
     if (!skill || typeof skill !== "string") {
       return NextResponse.json({ error: "Missing skill name" }, { status: 400 });
     }
-    if (personIndex === undefined) {
-      return NextResponse.json({ error: "Missing personIndex" }, { status: 400 });
+    if (!machineId) {
+      return NextResponse.json({ error: "Missing machineId" }, { status: 400 });
     }
 
-    const person = people[personIndex];
-    if (!person || !person.enabled || !person.ip) {
-      return NextResponse.json({ error: "Agent not available" }, { status: 404 });
+    const machine = await getMachineById(machineId);
+    if (!machine || !machine.enabled || !machine.ip) {
+      return NextResponse.json({ error: "Machine not available" }, { status: 404 });
     }
 
     // Read the local SKILL.md content
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const destFile = `${destDir}/SKILL.md`;
     const command = `mkdir -p ${destDir} && cat > ${destFile} << 'SKILLEOF'\n${content}\nSKILLEOF`;
 
-    const result = await execSSHCommand(person.ip, command);
+    const result = await execSSHCommand(machine.ip, command);
 
     return NextResponse.json({ ok: true, dest: destFile, exec: result });
   } catch (err) {

@@ -26,13 +26,41 @@ const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-// People data — must stay in sync with src/lib/people.ts
-const people = [
-  { name: "Sam", ip: "137.184.72.180", enabled: true },
-  { name: "Kelly", ip: null, enabled: false },
-  { name: "Greg", ip: null, enabled: false },
-  { name: "Alex", ip: null, enabled: false },
-];
+/**
+ * Look up a machine's IP by its UUID from Supabase using the service role key.
+ */
+async function getMachineIp(machineId) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceKey) {
+    console.error("[terminal] Missing Supabase config for machine lookup");
+    return null;
+  }
+
+  try {
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/machines?id=eq.${machineId}&select=ip,enabled`,
+      {
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+        },
+      }
+    );
+
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!rows.length) return null;
+
+    const machine = rows[0];
+    if (!machine.enabled || !machine.ip) return null;
+    return machine.ip;
+  } catch (err) {
+    console.error(`[terminal] Machine lookup failed: ${err.message}`);
+    return null;
+  }
+}
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
@@ -104,27 +132,19 @@ function getSSHConfig(ip) {
 const MAX_SSH_RETRIES = 3;
 const SSH_RETRY_DELAY_MS = 2000;
 
-function handleTerminalConnection(clientWs, query) {
-  const { personIndex } = query;
+async function handleTerminalConnection(clientWs, query) {
+  const { machineId } = query;
 
-  if (personIndex === undefined) {
-    clientWs.send("\x1b[1;31mMissing personIndex\x1b[0m\r\n");
+  if (!machineId) {
+    clientWs.send("\x1b[1;31mMissing machineId\x1b[0m\r\n");
     clientWs.close();
     return;
   }
 
-  // Look up the person's IP
-  let ip;
-  if (people) {
-    const person = people[parseInt(personIndex, 10)];
-    if (!person || !person.enabled || !person.ip) {
-      clientWs.send("\x1b[1;31mAgent not available\x1b[0m\r\n");
-      clientWs.close();
-      return;
-    }
-    ip = person.ip;
-  } else {
-    clientWs.send("\x1b[1;31mPeople data not loaded\x1b[0m\r\n");
+  // Look up the machine's IP from Supabase
+  const ip = await getMachineIp(machineId);
+  if (!ip) {
+    clientWs.send("\x1b[1;31mMachine not available\x1b[0m\r\n");
     clientWs.close();
     return;
   }

@@ -9,16 +9,16 @@ interface Tab {
 }
 
 interface TabbedTerminalProps {
-  personIndex: number;
-  personName: string;
+  machineId: string;
+  machineName: string;
   isActive: boolean;
 }
 
 let tabCounter = 0;
 
 export default function TabbedTerminal({
-  personIndex,
-  personName,
+  machineId,
+  machineName,
   isActive,
 }: TabbedTerminalProps) {
   const [tabs, setTabs] = useState<Tab[]>(() => {
@@ -125,8 +125,8 @@ export default function TabbedTerminal({
           >
             <Terminal
               ref={setTerminalRef(tab.id)}
-              personIndex={personIndex}
-              personName={personName}
+              machineId={machineId}
+              machineName={machineName}
               isActive={isActive && tab.id === activeTabId}
             />
           </div>

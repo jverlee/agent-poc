@@ -1,10 +1,10 @@
 import { createClient } from "./server";
 import type {
   Profile,
-  Organization,
-  OrganizationWithRole,
-  OrgRole,
-} from "../types/organization";
+  Workspace,
+  WorkspaceWithRole,
+  WorkspaceRole,
+} from "../types/workspace";
 
 export async function getCurrentProfile(): Promise<Profile | null> {
   const supabase = await createClient();
@@ -23,7 +23,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
   return (data as Profile) ?? null;
 }
 
-export async function getUserOrganizations(): Promise<OrganizationWithRole[]> {
+export async function getUserWorkspaces(): Promise<WorkspaceWithRole[]> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -31,54 +31,54 @@ export async function getUserOrganizations(): Promise<OrganizationWithRole[]> {
   if (!user) return [];
 
   const { data, error } = await supabase
-    .from("organization_members")
+    .from("workspace_members")
     .select(
       `
       role,
-      organization:organizations(*)
+      workspace:workspaces(*)
     `
     )
     .eq("user_id", user.id);
 
-  if (error) console.error("getUserOrganizations error:", error);
+  if (error) console.error("getUserWorkspaces error:", error);
   if (!data) return [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return data.map((row: any) => ({
-    organization: row.organization as Organization,
-    role: row.role as OrgRole,
+    workspace: row.workspace as Workspace,
+    role: row.role as WorkspaceRole,
   }));
 }
 
-export async function getActiveOrganization(): Promise<Organization | null> {
+export async function getActiveWorkspace(): Promise<Workspace | null> {
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
   const supabase = await createClient();
 
-  if (profile.active_organization_id) {
+  if (profile.active_workspace_id) {
     const { data } = await supabase
-      .from("organizations")
+      .from("workspaces")
       .select("*")
-      .eq("id", profile.active_organization_id)
+      .eq("id", profile.active_workspace_id)
       .single();
-    if (data) return data as Organization;
+    if (data) return data as Workspace;
   }
 
-  // Fallback: find any org they belong to
+  // Fallback: find any workspace they belong to
   const { data: memberRow } = await supabase
-    .from("organization_members")
-    .select("organization:organizations(*)")
+    .from("workspace_members")
+    .select("workspace:workspaces(*)")
     .eq("user_id", profile.id)
     .limit(1)
     .single();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return ((memberRow as any)?.organization as Organization) ?? null;
+  return ((memberRow as any)?.workspace as Workspace) ?? null;
 }
 
-export async function setActiveOrganization(
-  organizationId: string
+export async function setActiveWorkspace(
+  workspaceId: string
 ): Promise<boolean> {
   const supabase = await createClient();
   const {
@@ -88,10 +88,10 @@ export async function setActiveOrganization(
 
   // Verify membership
   const { data: membership } = await supabase
-    .from("organization_members")
+    .from("workspace_members")
     .select("id")
     .eq("user_id", user.id)
-    .eq("organization_id", organizationId)
+    .eq("workspace_id", workspaceId)
     .single();
 
   if (!membership) return false;
@@ -99,7 +99,7 @@ export async function setActiveOrganization(
   const { error } = await supabase
     .from("profiles")
     .update({
-      active_organization_id: organizationId,
+      active_workspace_id: workspaceId,
       updated_at: new Date().toISOString(),
     })
     .eq("id", user.id);

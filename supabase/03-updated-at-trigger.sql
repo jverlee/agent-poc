@@ -14,10 +14,10 @@ create trigger profiles_updated_at
   before update on public.profiles
   for each row execute function public.update_updated_at();
 
-create trigger organizations_updated_at
-  before update on public.organizations
+create trigger workspaces_updated_at
+  before update on public.workspaces
   for each row execute function public.update_updated_at();
 
-create trigger organization_members_updated_at
-  before update on public.organization_members
+create trigger workspace_members_updated_at
+  before update on public.workspace_members
   for each row execute function public.update_updated_at();

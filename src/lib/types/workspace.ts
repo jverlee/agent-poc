@@ -1,16 +1,16 @@
-export type OrgRole = "owner" | "admin" | "member";
+export type WorkspaceRole = "owner" | "admin" | "member";
 
 export interface Profile {
   id: string;
   email: string;
   full_name: string | null;
   avatar_url: string | null;
-  active_organization_id: string | null;
+  active_workspace_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface Organization {
+export interface Workspace {
   id: string;
   name: string;
   slug: string;
@@ -20,16 +20,16 @@ export interface Organization {
   updated_at: string;
 }
 
-export interface OrganizationMember {
+export interface WorkspaceMember {
   id: string;
-  organization_id: string;
+  workspace_id: string;
   user_id: string;
-  role: OrgRole;
+  role: WorkspaceRole;
   created_at: string;
   updated_at: string;
 }
 
-export interface OrganizationWithRole {
-  organization: Organization;
-  role: OrgRole;
+export interface WorkspaceWithRole {
+  workspace: Workspace;
+  role: WorkspaceRole;
 }

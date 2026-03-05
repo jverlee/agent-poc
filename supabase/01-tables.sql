@@ -1,6 +1,6 @@
 -- 1. Tables, FK, Indexes, RLS enable
 
-create table public.organizations (
+create table public.workspaces (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   slug text unique not null,
@@ -15,32 +15,32 @@ create table public.profiles (
   email text not null,
   full_name text,
   avatar_url text,
-  active_organization_id uuid,
+  active_workspace_id uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create table public.organization_members (
+create table public.workspace_members (
   id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   role text not null default 'member' check (role in ('owner', 'admin', 'member')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (organization_id, user_id)
+  unique (workspace_id, user_id)
 );
 
 alter table public.profiles
-  add constraint profiles_active_organization_id_fkey
-  foreign key (active_organization_id)
-  references public.organizations(id)
+  add constraint profiles_active_workspace_id_fkey
+  foreign key (active_workspace_id)
+  references public.workspaces(id)
   on delete set null;
 
-create index idx_organization_members_user_id on public.organization_members(user_id);
-create index idx_organization_members_org_id on public.organization_members(organization_id);
-create index idx_organizations_slug on public.organizations(slug);
-create index idx_profiles_active_org on public.profiles(active_organization_id);
+create index idx_workspace_members_user_id on public.workspace_members(user_id);
+create index idx_workspace_members_workspace_id on public.workspace_members(workspace_id);
+create index idx_workspaces_slug on public.workspaces(slug);
+create index idx_profiles_active_workspace on public.profiles(active_workspace_id);
 
 alter table public.profiles enable row level security;
-alter table public.organizations enable row level security;
-alter table public.organization_members enable row level security;
+alter table public.workspaces enable row level security;
+alter table public.workspace_members enable row level security;

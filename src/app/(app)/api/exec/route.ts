@@ -1,28 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { people } from "@/lib/people";
+import { getMachineById } from "@/lib/supabase/machines";
 import { execSSHCommand } from "@/lib/ssh";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { personIndex, command } = body;
+  const { machineId, command } = body;
 
-  if (personIndex === undefined || !command) {
+  if (!machineId || !command) {
     return NextResponse.json(
-      { error: "personIndex and command are required" },
+      { error: "machineId and command are required" },
       { status: 400 }
     );
   }
 
-  const person = people[personIndex];
-  if (!person || !person.enabled || !person.ip) {
+  const machine = await getMachineById(machineId);
+  if (!machine || !machine.enabled || !machine.ip) {
     return NextResponse.json(
-      { error: "Agent not available" },
+      { error: "Machine not available" },
       { status: 404 }
     );
   }
 
   try {
-    const result = await execSSHCommand(person.ip, command);
+    const result = await execSSHCommand(machine.ip, command);
     return NextResponse.json({
       stdout: result.stdout,
       stderr: result.stderr,
