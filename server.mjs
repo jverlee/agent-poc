@@ -45,6 +45,18 @@ app.prepare().then(() => {
     const { pathname, query } = parse(req.url, true);
 
     if (pathname === "/api/terminal") {
+      // Check for Supabase auth cookie before allowing WebSocket upgrade
+      const cookies = parseCookies(req.headers.cookie || "");
+      const hasAuth = Object.keys(cookies).some(
+        (name) => name.startsWith("sb-") && name.includes("-auth-token")
+      );
+
+      if (!hasAuth) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+
       wss.handleUpgrade(req, socket, head, (clientWs) => {
         handleTerminalConnection(clientWs, query);
       });
@@ -57,6 +69,15 @@ app.prepare().then(() => {
     console.log(`> Ready on http://localhost:${port}`);
   });
 });
+
+function parseCookies(cookieHeader) {
+  const cookies = {};
+  cookieHeader.split(";").forEach((cookie) => {
+    const [name, ...rest] = cookie.trim().split("=");
+    if (name) cookies[name] = rest.join("=");
+  });
+  return cookies;
+}
 
 function getSSHConfig(ip) {
   const keyPath = process.env.SSH_PRIVATE_KEY_PATH || "~/.ssh/id_rsa";
