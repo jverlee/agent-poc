@@ -8,21 +8,38 @@ import { useStatuses } from "@/components/status-provider";
 
 export function SidebarNav() {
   const searchParams = useSearchParams();
-  const currentApp = searchParams.get("app");
-  const currentMachine = searchParams.get("machine");
+  const currentIndex = parseInt(searchParams.get("person") || "0", 10);
   const { statuses } = useStatuses();
 
   return (
     <ul className="flex flex-col gap-1 px-3">
-      {people.map((person) => {
-        const isActive =
-          person.appName === currentApp && person.machineId === currentMachine ||
-          (!currentApp && !currentMachine && person === people[0]);
+      {people.map((person, index) => {
+        const isActive = index === currentIndex;
+        const isDisabled = !person.enabled;
+
+        if (isDisabled) {
+          return (
+            <li key={person.name}>
+              <div
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium opacity-40 cursor-not-allowed"
+              >
+                <div className="relative shrink-0">
+                  <img src={person.avatar} alt={person.name} className="h-9 w-9 rounded-full object-cover grayscale" />
+                  <StatusBadge state="disabled" size="sm" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-zinc-500">{person.name}</span>
+                  <span className="text-xs font-normal text-zinc-600">{person.role}</span>
+                </div>
+              </div>
+            </li>
+          );
+        }
 
         return (
           <li key={person.name}>
             <Link
-              href={`/?app=${person.appName}&machine=${person.machineId}`}
+              href={`/?person=${index}`}
               className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
                 isActive
                   ? "bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
@@ -32,7 +49,7 @@ export function SidebarNav() {
               <div className="relative shrink-0">
                 <img src={person.avatar} alt={person.name} className="h-9 w-9 rounded-full object-cover" />
                 <StatusBadge
-                  state={statuses[`${person.appName}:${person.machineId}`]}
+                  state={statuses[String(index)]}
                   size="sm"
                 />
               </div>

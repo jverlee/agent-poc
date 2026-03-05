@@ -2,8 +2,8 @@ export interface Person {
   name: string;
   role: string;
   avatar: string;
-  appName: string;
-  machineId: string;
+  ip: string | null;
+  enabled: boolean;
 }
 
 export const people: Person[] = [
@@ -11,32 +11,32 @@ export const people: Person[] = [
     name: "Sam",
     role: "CX Specialist",
     avatar: "/avatars/sam.jpg",
-    appName: "agent-a",
-    machineId: "185924c433dd78",
+    ip: "137.184.72.180",
+    enabled: true,
   },
   {
     name: "Kelly",
     role: "Social Media Creator",
     avatar: "/avatars/kelly.jpg",
-    appName: "agent-b",
-    machineId: "17810e42f4e728",
+    ip: null,
+    enabled: false,
   },
   {
     name: "Greg",
     role: "Analyst",
     avatar: "/avatars/greg.jpg",
-    appName: "agent-c",
-    machineId: "78171d2f2d7798",
+    ip: null,
+    enabled: false,
   },
   {
     name: "Alex",
     role: "Designer",
     avatar: "/avatars/alex.jpg",
-    appName: "agent-d",
-    machineId: "148e604dfd6238",
+    ip: null,
+    enabled: false,
   },
 ];
 
-export function findPerson(appName: string, machineId: string): Person | undefined {
-  return people.find((p) => p.appName === appName && p.machineId === machineId);
+export function findPersonByIndex(index: number): Person | undefined {
+  return people[index];
 }

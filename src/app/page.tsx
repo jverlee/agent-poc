@@ -6,16 +6,15 @@ import dynamic from "next/dynamic";
 import ConnectionForm from "@/components/ConnectionForm";
 import { StatusBadge } from "@/components/status-badge";
 import { useStatuses } from "@/components/status-provider";
-import { people, findPerson } from "@/lib/people";
+import { people } from "@/lib/people";
 
 const Terminal = dynamic(() => import("@/components/Terminal"), { ssr: false });
 
 function HomeContent() {
   const searchParams = useSearchParams();
-  const appName = searchParams.get("app") || "agent-a";
-  const machineId = searchParams.get("machine") || "185924c433dd78";
+  const personIndex = parseInt(searchParams.get("person") || "0", 10);
 
-  const person = findPerson(appName, machineId);
+  const person = people[personIndex];
 
   const { setAgentStatus } = useStatuses();
   const [machineState, setMachineState] = useState<string | null>(null);
@@ -26,16 +25,17 @@ function HomeContent() {
   }>({ cpus: null, cpuKind: null, memoryMb: null });
 
   const fetchStatus = useCallback(async () => {
+    if (!person?.enabled) return;
     try {
       const res = await fetch("/api/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appName, machineId }),
+        body: JSON.stringify({ personIndex }),
       });
       const data = await res.json();
       if (data.state) {
         setMachineState(data.state);
-        setAgentStatus(appName, machineId, data.state);
+        setAgentStatus(personIndex, data.state);
       }
       if (data.cpus != null) {
         setMachineSpecs({
@@ -47,15 +47,19 @@ function HomeContent() {
     } catch {
       // silently ignore polling errors
     }
-  }, [appName, machineId, setAgentStatus]);
+  }, [personIndex, person?.enabled, setAgentStatus]);
 
   useEffect(() => {
     setMachineState(null);
     setMachineSpecs({ cpus: null, cpuKind: null, memoryMb: null });
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
-  }, [appName, machineId, fetchStatus]);
+    if (person?.enabled) {
+      fetchStatus();
+      const interval = setInterval(fetchStatus, 5000);
+      return () => clearInterval(interval);
+    } else {
+      setMachineState("disabled");
+    }
+  }, [personIndex, person?.enabled, fetchStatus]);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
@@ -76,49 +80,45 @@ function HomeContent() {
             </h1>
             <p className="text-sm text-zinc-500">{person.role}</p>
           </div>
-          <div className="ml-auto">
-            <ConnectionForm
-              appName={appName}
-              machineId={machineId}
-              machineState={machineState}
-              cpus={machineSpecs.cpus}
-              cpuKind={machineSpecs.cpuKind}
-              memoryMb={machineSpecs.memoryMb}
-            />
-          </div>
-        </div>
-      )}
-      {!person && (
-        <div className="mb-4 shrink-0">
-          <ConnectionForm
-            appName={appName}
-            machineId={machineId}
-            machineState={machineState}
-            cpus={machineSpecs.cpus}
-            cpuKind={machineSpecs.cpuKind}
-            memoryMb={machineSpecs.memoryMb}
-          />
+          {person.enabled && (
+            <div className="ml-auto">
+              <ConnectionForm
+                personIndex={personIndex}
+                ip={person.ip}
+                machineState={machineState}
+                cpus={machineSpecs.cpus}
+                cpuKind={machineSpecs.cpuKind}
+                memoryMb={machineSpecs.memoryMb}
+              />
+            </div>
+          )}
         </div>
       )}
       <div className="min-h-0 flex-1">
-        {people.map((person) => (
-          <div
-            key={`${person.appName}-${person.machineId}`}
-            className="h-full w-full"
-            style={{
-              display:
-                person.appName === appName && person.machineId === machineId
-                  ? "block"
-                  : "none",
-            }}
-          >
-            <Terminal
-              appName={person.appName}
-              machineId={person.machineId}
-              isActive={person.appName === appName && person.machineId === machineId}
-            />
+        {person?.enabled ? (
+          people.map((p, index) => {
+            if (!p.enabled) return null;
+            return (
+              <div
+                key={index}
+                className="h-full w-full"
+                style={{
+                  display: index === personIndex ? "block" : "none",
+                }}
+              >
+                <Terminal
+                  personIndex={index}
+                  personName={p.name}
+                  isActive={index === personIndex}
+                />
+              </div>
+            );
+          })
+        ) : (
+          <div className="flex h-full items-center justify-center text-zinc-500">
+            <p>This agent is not currently available.</p>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

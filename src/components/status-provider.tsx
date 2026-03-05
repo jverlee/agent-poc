@@ -6,7 +6,7 @@ type StatusMap = Record<string, string | null>;
 
 interface StatusContextValue {
   statuses: StatusMap;
-  setAgentStatus: (appName: string, machineId: string, state: string | null) => void;
+  setAgentStatus: (personIndex: number, state: string | null) => void;
 }
 
 const StatusContext = createContext<StatusContextValue>({
@@ -40,8 +40,8 @@ export function StatusProvider({ children }: { children: React.ReactNode }) {
   }, [fetchAllStatuses]);
 
   const setAgentStatus = useCallback(
-    (appName: string, machineId: string, state: string | null) => {
-      setStatuses((prev) => ({ ...prev, [`${appName}:${machineId}`]: state }));
+    (personIndex: number, state: string | null) => {
+      setStatuses((prev) => ({ ...prev, [String(personIndex)]: state }));
     },
     []
   );

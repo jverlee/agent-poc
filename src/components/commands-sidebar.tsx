@@ -26,8 +26,7 @@ const skills: Skill[] = [
 
 export function CommandsSidebar() {
   const searchParams = useSearchParams();
-  const appName = searchParams.get("app") || "agent-a";
-  const machineId = searchParams.get("machine") || "185924c433dd78";
+  const personIndex = parseInt(searchParams.get("person") || "0", 10);
 
   const [restarting, setRestarting] = useState(false);
   const [installingSkill, setInstallingSkill] = useState<string | null>(null);
@@ -45,7 +44,7 @@ export function CommandsSidebar() {
       const res = await fetch("/api/install-skill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ skill: skill.slug, appName, machineId }),
+        body: JSON.stringify({ skill: skill.slug, personIndex }),
       });
       const data = await res.json();
       if (data.error) {
@@ -67,7 +66,7 @@ export function CommandsSidebar() {
       const res = await fetch("/api/restart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appName, machineId }),
+        body: JSON.stringify({ personIndex }),
       });
       const data = await res.json();
       if (data.error) {
