@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import type { Machine } from "@/lib/supabase/machines";
 
 interface Command {
   label: string;
@@ -24,11 +25,13 @@ const skills: Skill[] = [
   { label: "Add Check Email Skill", slug: "check-email", icon: "📧" },
 ];
 
-export function CommandsSidebar() {
+export function CommandsSidebar({ machines }: { machines: Machine[] }) {
   const searchParams = useSearchParams();
-  const machineId = searchParams.get("machine") || "";
+  const router = useRouter();
+  const machineId = searchParams.get("machine") || machines[0]?.id || "";
 
   const [restarting, setRestarting] = useState(false);
+  const [destroying, setDestroying] = useState(false);
   const [installingSkill, setInstallingSkill] = useState<string | null>(null);
 
   function runCommand(cmd: Command) {
@@ -54,6 +57,31 @@ export function CommandsSidebar() {
       alert(`Failed to install skill: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setInstallingSkill(null);
+    }
+  }
+
+  async function handleDestroy() {
+    if (destroying) return;
+    if (!confirm("Destroy this machine? This will permanently delete the machine and its droplet. This cannot be undone.")) return;
+
+    setDestroying(true);
+    try {
+      const res = await fetch("/api/machines/destroy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ machineId }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(`Destroy failed: ${data.error}`);
+      } else {
+        router.push("/");
+        router.refresh();
+      }
+    } catch (err) {
+      alert(`Destroy failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDestroying(false);
     }
   }
 
@@ -104,6 +132,17 @@ export function CommandsSidebar() {
           <span>{restarting ? "Restarting\u2026" : "Force Restart"}</span>
           {restarting && (
             <span className="ml-auto text-xs text-zinc-400 animate-pulse">...</span>
+          )}
+        </button>
+        <button
+          onClick={handleDestroy}
+          disabled={destroying}
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30"
+        >
+          <span className="w-5 text-center text-xs">💥</span>
+          <span>{destroying ? "Destroying\u2026" : "Destroy Machine"}</span>
+          {destroying && (
+            <span className="ml-auto text-xs text-red-400 animate-pulse">...</span>
           )}
         </button>
       </div>

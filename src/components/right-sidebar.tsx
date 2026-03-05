@@ -2,8 +2,9 @@
 
 import { useState, Suspense } from "react";
 import { CommandsSidebar } from "./commands-sidebar";
+import type { Machine } from "@/lib/supabase/machines";
 
-export function RightSidebar() {
+export function RightSidebar({ machines }: { machines: Machine[] }) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -20,7 +21,7 @@ export function RightSidebar() {
       >
         <div className="w-56">
           <Suspense>
-            <CommandsSidebar />
+            <CommandsSidebar machines={machines} />
           </Suspense>
         </div>
       </div>
