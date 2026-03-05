@@ -75,10 +75,10 @@ export function WorkspaceSwitcher({
   }
 
   return (
-    <div className="relative px-6 pb-2" ref={ref}>
+    <div className="relative -ml-1 mt-0.5" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        className="flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-sm text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
       >
         <span className="truncate">{activeWorkspace.name}</span>
         <svg
@@ -96,7 +96,7 @@ export function WorkspaceSwitcher({
         </svg>
       </button>
       {open && (
-        <div className="absolute left-6 right-6 top-full z-50 mt-1 rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
           {workspaces.map(({ workspace, role }) => (
             <button
               key={workspace.id}
