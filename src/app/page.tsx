@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { useStatuses } from "@/components/status-provider";
 import { people } from "@/lib/people";
 
-const Terminal = dynamic(() => import("@/components/Terminal"), { ssr: false });
+const TabbedTerminal = dynamic(() => import("@/components/TabbedTerminal"), { ssr: false });
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -106,7 +106,7 @@ function HomeContent() {
                   display: index === personIndex ? "block" : "none",
                 }}
               >
-                <Terminal
+                <TabbedTerminal
                   personIndex={index}
                   personName={p.name}
                   isActive={index === personIndex}

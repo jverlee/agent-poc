@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+
+export interface TerminalHandle {
+  sendCommand: (command: string) => void;
+}
 
 interface TerminalProps {
   personIndex: number;
@@ -11,7 +15,10 @@ interface TerminalProps {
   isActive?: boolean;
 }
 
-export default function Terminal({ personIndex, personName, isActive = true }: TerminalProps) {
+const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
+  { personIndex, personName, isActive = true },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -40,6 +47,7 @@ export default function Terminal({ personIndex, personName, isActive = true }: T
 
     termRef.current = term;
     fitRef.current = fit;
+    wsRef.current = null; // reset before new connection
 
     term.writeln(
       `\x1b[1;36mConnecting to ${personName}...\x1b[0m`
@@ -79,15 +87,6 @@ export default function Terminal({ personIndex, personName, isActive = true }: T
       }
     });
 
-    // Listen for programmatic command injection from shortcuts
-    const onSendCommand = (e: Event) => {
-      const command = (e as CustomEvent<string>).detail;
-      if (ws.readyState === WebSocket.OPEN && command) {
-        ws.send(command + "\r");
-      }
-    };
-    window.addEventListener("terminal-send-command", onSendCommand);
-
     // Re-fit on window resize
     const onWindowResize = () => {
       fit.fit();
@@ -95,7 +94,6 @@ export default function Terminal({ personIndex, personName, isActive = true }: T
     window.addEventListener("resize", onWindowResize);
 
     return () => {
-      window.removeEventListener("terminal-send-command", onSendCommand);
       window.removeEventListener("resize", onWindowResize);
       dataDisposable.dispose();
       resizeDisposable.dispose();
@@ -103,6 +101,14 @@ export default function Terminal({ personIndex, personName, isActive = true }: T
       term.dispose();
     };
   }, [personIndex, personName]);
+
+  useImperativeHandle(ref, () => ({
+    sendCommand: (command: string) => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && command) {
+        wsRef.current.send(command + "\r");
+      }
+    },
+  }));
 
   useEffect(() => {
     if (isActive && fitRef.current) {
@@ -113,7 +119,9 @@ export default function Terminal({ personIndex, personName, isActive = true }: T
   return (
     <div
       ref={containerRef}
-      className="h-full w-full rounded-lg border border-zinc-800 bg-[#18181b] p-2"
+      className="h-full w-full bg-[#18181b] p-2"
     />
   );
-}
+});
+
+export default Terminal;
