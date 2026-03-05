@@ -1,8 +1,8 @@
 "use client";
 
 interface ConnectionFormProps {
-  appName: string;
-  machineId: string;
+  personIndex: number;
+  ip: string | null;
   machineState?: string | null;
   cpus?: number | null;
   cpuKind?: string | null;
@@ -18,9 +18,7 @@ function formatMemory(mb: number): string {
 }
 
 export default function ConnectionForm({
-  appName,
-  machineId,
-  machineState,
+  ip,
   cpus,
   cpuKind,
   memoryMb,
@@ -30,7 +28,7 @@ export default function ConnectionForm({
   return (
     <div className="flex flex-col items-end gap-0.5">
       <span className="text-sm text-zinc-400">
-        {appName} / {machineId}
+        {ip || "No IP assigned"}
       </span>
       {hasSpecs && (
         <span className="text-xs text-zinc-500">

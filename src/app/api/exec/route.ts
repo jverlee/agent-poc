@@ -1,67 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const FLY_API_BASE = "https://api.machines.dev/v1";
+import { people } from "@/lib/people";
+import { execSSHCommand } from "@/lib/ssh";
 
 export async function POST(request: NextRequest) {
-  const token = process.env.FLY_API_TOKEN;
-  if (!token) {
-    return NextResponse.json(
-      { error: "FLY_API_TOKEN is not configured" },
-      { status: 500 }
-    );
-  }
-
   const body = await request.json();
-  const { appName, machineId, command } = body;
+  const { personIndex, command } = body;
 
-  if (!appName || !machineId || !command) {
+  if (personIndex === undefined || !command) {
     return NextResponse.json(
-      { error: "appName, machineId, and command are required" },
+      { error: "personIndex and command are required" },
       { status: 400 }
     );
   }
 
-  const commandParts = command.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
-  const parsed = commandParts.map((part: string) =>
-    part.replace(/^["']|["']$/g, "")
-  );
-
-  if (parsed.length === 0) {
+  const person = people[personIndex];
+  if (!person || !person.enabled || !person.ip) {
     return NextResponse.json(
-      { error: "Empty command" },
-      { status: 400 }
+      { error: "Agent not available" },
+      { status: 404 }
     );
   }
 
   try {
-    const res = await fetch(
-      `${FLY_API_BASE}/apps/${encodeURIComponent(appName)}/machines/${encodeURIComponent(machineId)}/exec`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          command: parsed,
-          timeout: 60,
-        }),
-      }
-    );
-
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json(
-        { error: `Fly.io API error (${res.status}): ${text}` },
-        { status: res.status }
-      );
-    }
-
-    const data = await res.json();
-    return NextResponse.json(data);
+    const result = await execSSHCommand(person.ip, command);
+    return NextResponse.json({
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exit_code: result.code,
+    });
   } catch (err) {
     return NextResponse.json(
-      { error: `Failed to reach Fly.io API: ${err instanceof Error ? err.message : String(err)}` },
+      { error: `SSH exec failed: ${err instanceof Error ? err.message : String(err)}` },
       { status: 502 }
     );
   }

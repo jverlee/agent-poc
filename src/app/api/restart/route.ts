@@ -1,49 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const FLY_API_BASE = "https://api.machines.dev/v1";
+import { people } from "@/lib/people";
+import { getDropletByIp, restartDroplet } from "@/lib/digitalocean";
 
 export async function POST(request: NextRequest) {
-  const token = process.env.FLY_API_TOKEN;
-  if (!token) {
-    return NextResponse.json(
-      { error: "FLY_API_TOKEN is not configured" },
-      { status: 500 }
-    );
-  }
-
   const body = await request.json();
-  const { appName, machineId } = body;
+  const { personIndex } = body;
 
-  if (!appName || !machineId) {
+  if (personIndex === undefined) {
     return NextResponse.json(
-      { error: "appName and machineId are required" },
+      { error: "personIndex is required" },
       { status: 400 }
     );
   }
 
-  try {
-    const res = await fetch(
-      `${FLY_API_BASE}/apps/${encodeURIComponent(appName)}/machines/${encodeURIComponent(machineId)}/restart?force_stop=true`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+  const person = people[personIndex];
+  if (!person || !person.enabled || !person.ip) {
+    return NextResponse.json(
+      { error: "Agent not available" },
+      { status: 404 }
     );
+  }
 
-    if (!res.ok) {
-      const text = await res.text();
+  try {
+    const droplet = await getDropletByIp(person.ip);
+    if (!droplet) {
       return NextResponse.json(
-        { error: `Fly.io API error (${res.status}): ${text}` },
-        { status: res.status }
+        { error: "Droplet not found for this IP" },
+        { status: 404 }
       );
     }
 
+    await restartDroplet(droplet.id);
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json(
-      { error: `Failed to reach Fly.io API: ${err instanceof Error ? err.message : String(err)}` },
+      { error: `Restart failed: ${err instanceof Error ? err.message : String(err)}` },
       { status: 502 }
     );
   }

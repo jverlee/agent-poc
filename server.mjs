@@ -1,10 +1,12 @@
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { parse } from "node:url";
+import { resolve } from "node:path";
 import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
+import { Client } from "ssh2";
 
-// Load .env.local if it exists (for local dev overrides like TTYD_HOST)
+// Load .env.local if it exists (for local dev overrides)
 try {
   const envFile = readFileSync(".env.local", "utf-8");
   for (const line of envFile.split("\n")) {
@@ -24,7 +26,13 @@ const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-const TTYD_PORT = process.env.TTYD_PORT || "7681";
+// People data — must stay in sync with src/lib/people.ts
+const people = [
+  { name: "Sam", ip: "137.184.72.180", enabled: true },
+  { name: "Kelly", ip: null, enabled: false },
+  { name: "Greg", ip: null, enabled: false },
+  { name: "Alex", ip: null, enabled: false },
+];
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
@@ -42,7 +50,6 @@ app.prepare().then(() => {
       });
     }
     // Non-terminal upgrades (e.g. Next.js HMR) are left unhandled
-    // so the default server behavior can process them
   });
 
   const port = parseInt(process.env.PORT || "3000", 10);
@@ -51,109 +58,133 @@ app.prepare().then(() => {
   });
 });
 
+function getSSHConfig(ip) {
+  const keyPath = process.env.SSH_PRIVATE_KEY_PATH || "~/.ssh/id_rsa";
+  const resolved = keyPath.startsWith("~")
+    ? keyPath.replace("~", process.env.HOME || "/root")
+    : resolve(keyPath);
+
+  return {
+    host: ip,
+    port: 22,
+    username: process.env.SSH_USER || "root",
+    privateKey: readFileSync(resolved),
+  };
+}
+
 /**
- * Proxies a browser WebSocket to a ttyd instance on a Fly machine.
+ * Proxies a browser WebSocket to an SSH shell on a Digital Ocean droplet.
  *
- * Protocol translation:
- *   Browser sends raw text (keystrokes)      → proxy prepends 0x00 (INPUT)  → ttyd
- *   Browser sends JSON {cols, rows}          → proxy prepends 0x01 (RESIZE) → ttyd
- *   ttyd sends 0x00 + output bytes           → proxy strips prefix          → browser
+ * Protocol:
+ *   Browser sends raw text (keystrokes)      → SSH stdin
+ *   Browser sends JSON {cols, rows}          → SSH channel.setWindow()
+ *   SSH stdout                               → browser (text)
  */
-const MAX_TTYD_RETRIES = 5;
-const TTYD_RETRY_DELAY_MS = 2000;
+const MAX_SSH_RETRIES = 3;
+const SSH_RETRY_DELAY_MS = 2000;
 
 function handleTerminalConnection(clientWs, query) {
-  const { appName, machineId } = query;
+  const { personIndex } = query;
 
-  if (!appName || !machineId) {
-    clientWs.send("\x1b[1;31mMissing appName or machineId\x1b[0m\r\n");
+  if (personIndex === undefined) {
+    clientWs.send("\x1b[1;31mMissing personIndex\x1b[0m\r\n");
     clientWs.close();
     return;
   }
 
-  // Build ttyd WebSocket URL.
-  // In production (on Fly): use internal DNS <machineId>.vm.<appName>.internal:7681
-  // Locally: use Fly's public proxy wss://<appName>.fly.dev/ws
-  const isLocal = dev || process.env.TTYD_USE_PUBLIC_PROXY === "true";
-  let ttydUrl;
-  let wsOptions = { protocols: ["tty"] };
-
-  if (isLocal) {
-    ttydUrl = `wss://${appName}.fly.dev/ws`;
-    wsOptions.headers = { "fly-force-instance-id": machineId };
+  // Look up the person's IP
+  let ip;
+  if (people) {
+    const person = people[parseInt(personIndex, 10)];
+    if (!person || !person.enabled || !person.ip) {
+      clientWs.send("\x1b[1;31mAgent not available\x1b[0m\r\n");
+      clientWs.close();
+      return;
+    }
+    ip = person.ip;
   } else {
-    const ttydHost = `${machineId}.vm.${appName}.internal`;
-    ttydUrl = `ws://${ttydHost}:${TTYD_PORT}/ws`;
+    clientWs.send("\x1b[1;31mPeople data not loaded\x1b[0m\r\n");
+    clientWs.close();
+    return;
   }
 
-  let ttydWs = null;
+  let sshConn = null;
+  let sshStream = null;
   let attempt = 0;
-  // Queue messages from the browser while reconnecting
   const pendingMessages = [];
 
-  function connectTtyd() {
+  function connectSSH() {
     attempt++;
-    console.log(`[terminal] Connecting to ttyd at ${ttydUrl} (attempt ${attempt}/${MAX_TTYD_RETRIES})`);
+    console.log(`[terminal] SSH connecting to ${ip} (attempt ${attempt}/${MAX_SSH_RETRIES})`);
 
-    ttydWs = new WebSocket(ttydUrl, wsOptions.protocols, {
-      headers: wsOptions.headers,
+    sshConn = new Client();
+
+    sshConn.on("ready", () => {
+      console.log(`[terminal] SSH connected to ${ip}`);
+      sshConn.shell({ term: "xterm-256color" }, (err, stream) => {
+        if (err) {
+          console.error(`[terminal] SSH shell error: ${err.message}`);
+          clientWs.send(`\r\n\x1b[1;31mFailed to open shell: ${err.message}\x1b[0m\r\n`);
+          clientWs.close();
+          return;
+        }
+
+        sshStream = stream;
+
+        // SSH stdout → browser
+        stream.on("data", (data) => {
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(data.toString("utf-8"));
+          }
+        });
+
+        stream.stderr.on("data", (data) => {
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(data.toString("utf-8"));
+          }
+        });
+
+        stream.on("close", () => {
+          console.log(`[terminal] SSH stream closed for ${ip}`);
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send("\r\n\x1b[1;31mTerminal session ended\x1b[0m\r\n");
+            clientWs.close();
+          }
+          sshConn.end();
+        });
+
+        // Flush queued messages
+        while (pendingMessages.length > 0) {
+          forwardToSSH(pendingMessages.shift());
+        }
+      });
     });
 
-    ttydWs.on("open", () => {
-      console.log(`[terminal] Connected to ttyd for ${appName}/${machineId}`);
-      // ttyd requires an auth handshake before spawning the shell.
-      ttydWs.send('{"AuthToken":""}');
-      // Flush any queued messages
-      while (pendingMessages.length > 0) {
-        forwardToTtyd(pendingMessages.shift());
-      }
-    });
-
-    ttydWs.on("message", (data) => {
-      if (clientWs.readyState !== WebSocket.OPEN) return;
-
-      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-      let msgType = buf[0];
-
-      if (msgType >= 48 && msgType <= 50) {
-        msgType = msgType - 48;
-      }
-
-      console.log(`[terminal] ttyd→browser: type=${msgType} len=${buf.length} raw0=${buf[0]} preview=${buf.slice(0, 20).toString("hex")}`);
-
-      if (msgType === 0) {
-        clientWs.send(buf.slice(1).toString("utf-8"));
-      }
-    });
-
-    ttydWs.on("close", () => {
-      console.log(`[terminal] ttyd disconnected (${appName}/${machineId})`);
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send("\r\n\x1b[1;31mTerminal session ended\x1b[0m\r\n");
-        clientWs.close();
-      }
-    });
-
-    ttydWs.on("error", (err) => {
-      console.error(`[terminal] ttyd connection error (attempt ${attempt}): ${err.message}`);
-      if (attempt < MAX_TTYD_RETRIES && clientWs.readyState === WebSocket.OPEN) {
+    sshConn.on("error", (err) => {
+      console.error(`[terminal] SSH connection error (attempt ${attempt}): ${err.message}`);
+      if (attempt < MAX_SSH_RETRIES && clientWs.readyState === WebSocket.OPEN) {
         clientWs.send(
-          `\r\n\x1b[1;33mConnection attempt ${attempt} failed, retrying in ${TTYD_RETRY_DELAY_MS / 1000}s...\x1b[0m\r\n`
+          `\r\n\x1b[1;33mConnection attempt ${attempt} failed, retrying in ${SSH_RETRY_DELAY_MS / 1000}s...\x1b[0m\r\n`
         );
-        // Remove listeners from the failed WebSocket to prevent the close handler from firing
-        ttydWs.removeAllListeners();
-        setTimeout(connectTtyd, TTYD_RETRY_DELAY_MS);
+        sshConn.removeAllListeners();
+        setTimeout(connectSSH, SSH_RETRY_DELAY_MS);
       } else if (clientWs.readyState === WebSocket.OPEN) {
         clientWs.send(
-          `\r\n\x1b[1;31mFailed to connect to terminal after ${MAX_TTYD_RETRIES} attempts: ${err.message}\x1b[0m\r\n`
+          `\r\n\x1b[1;31mFailed to connect after ${MAX_SSH_RETRIES} attempts: ${err.message}\x1b[0m\r\n`
         );
         clientWs.close();
       }
     });
+
+    sshConn.on("close", () => {
+      console.log(`[terminal] SSH connection closed for ${ip}`);
+    });
+
+    sshConn.connect(getSSHConfig(ip));
   }
 
-  function forwardToTtyd(str) {
-    if (!ttydWs || ttydWs.readyState !== WebSocket.OPEN) return;
+  function forwardToSSH(str) {
+    if (!sshStream) return;
 
     // Check if this is a resize message (JSON with cols/rows)
     try {
@@ -164,50 +195,31 @@ function handleTerminalConnection(clientWs, query) {
         "cols" in parsed &&
         "rows" in parsed
       ) {
-        const resizeJson = JSON.stringify({
-          columns: parsed.cols,
-          rows: parsed.rows,
-        });
-        if (isLocal) {
-          ttydWs.send("1" + resizeJson);
-        } else {
-          const buf = Buffer.alloc(1 + Buffer.byteLength(resizeJson));
-          buf[0] = 1;
-          buf.write(resizeJson, 1);
-          ttydWs.send(buf);
-        }
+        sshStream.setWindow(parsed.rows, parsed.cols, 0, 0);
         return;
       }
     } catch {
       // Not JSON — treat as terminal input
     }
 
-    if (isLocal) {
-      ttydWs.send("0" + str);
-    } else {
-      const buf = Buffer.alloc(1 + Buffer.byteLength(str));
-      buf[0] = 0;
-      buf.write(str, 1);
-      ttydWs.send(buf);
-    }
+    sshStream.write(str);
   }
 
   clientWs.on("message", (msg) => {
     const str = msg.toString();
-    console.log(`[terminal] browser→ttyd: ${JSON.stringify(str).slice(0, 100)}`);
 
-    if (ttydWs && ttydWs.readyState === WebSocket.OPEN) {
-      forwardToTtyd(str);
+    if (sshStream) {
+      forwardToSSH(str);
     } else {
-      // Queue while (re)connecting
       pendingMessages.push(str);
     }
   });
 
   clientWs.on("close", () => {
-    console.log(`[terminal] Client disconnected (${appName}/${machineId})`);
-    if (ttydWs && ttydWs.readyState === WebSocket.OPEN) ttydWs.close();
+    console.log(`[terminal] Client disconnected for ${ip}`);
+    if (sshStream) sshStream.close();
+    if (sshConn) sshConn.end();
   });
 
-  connectTtyd();
+  connectSSH();
 }

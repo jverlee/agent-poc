@@ -7,6 +7,7 @@ const stateColors: Record<string, string> = {
   created: "bg-blue-500",
   destroying: "bg-red-500 animate-pulse",
   destroyed: "bg-red-500",
+  disabled: "bg-zinc-600",
 };
 
 export function StatusBadge({

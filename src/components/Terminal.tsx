@@ -6,12 +6,12 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 
 interface TerminalProps {
-  appName: string;
-  machineId: string;
+  personIndex: number;
+  personName: string;
   isActive?: boolean;
 }
 
-export default function Terminal({ appName, machineId, isActive = true }: TerminalProps) {
+export default function Terminal({ personIndex, personName, isActive = true }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -42,24 +42,20 @@ export default function Terminal({ appName, machineId, isActive = true }: Termin
     fitRef.current = fit;
 
     term.writeln(
-      `\x1b[1;36mConnecting to ${appName} / ${machineId}...\x1b[0m`
+      `\x1b[1;36mConnecting to ${personName}...\x1b[0m`
     );
 
-    // Connect through the server-side WebSocket proxy which handles
-    // ttyd binary protocol translation and Fly machine targeting
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsProtocol}//${window.location.host}/api/terminal?appName=${encodeURIComponent(appName)}&machineId=${encodeURIComponent(machineId)}`;
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/terminal?personIndex=${personIndex}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
       term.writeln("\x1b[1;32mConnected\x1b[0m");
-      // Send initial terminal size as JSON (proxy translates to ttyd protocol)
       ws.send(JSON.stringify({ cols: term.cols, rows: term.rows }));
     };
 
     ws.onmessage = (event) => {
-      // Proxy strips ttyd framing and forwards plain text output
       term.write(event.data);
     };
 
@@ -71,14 +67,12 @@ export default function Terminal({ appName, machineId, isActive = true }: Termin
       term.writeln("\r\n\x1b[1;31mWebSocket error\x1b[0m");
     };
 
-    // Forward user input as plain text (proxy translates to ttyd protocol)
     const dataDisposable = term.onData((data) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(data);
       }
     });
 
-    // Handle terminal resize — send JSON (proxy translates to ttyd protocol)
     const resizeDisposable = term.onResize(({ cols, rows }) => {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ cols, rows }));
@@ -108,7 +102,7 @@ export default function Terminal({ appName, machineId, isActive = true }: Termin
       ws.close();
       term.dispose();
     };
-  }, [appName, machineId]);
+  }, [personIndex, personName]);
 
   useEffect(() => {
     if (isActive && fitRef.current) {
