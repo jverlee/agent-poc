@@ -40,15 +40,17 @@ export default async function AppLayout({
     <StatusProvider>
       <div className="flex min-h-screen">
         <nav className="flex w-60 shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="p-6 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Workmate
+          <div className="px-6 pb-4 pt-6">
+            <div className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              Workmate
+            </div>
+            {activeWorkspace && (
+              <WorkspaceSwitcher
+                workspaces={workspaces}
+                activeWorkspace={activeWorkspace}
+              />
+            )}
           </div>
-          {activeWorkspace && (
-            <WorkspaceSwitcher
-              workspaces={workspaces}
-              activeWorkspace={activeWorkspace}
-            />
-          )}
           <SidebarWithModal machines={machines} />
           <div className="mt-auto border-t border-zinc-200 p-4 dark:border-zinc-800">
             <div className="flex items-center gap-3">
