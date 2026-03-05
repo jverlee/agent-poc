@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
-import { SidebarNav } from "@/components/sidebar-nav";
-import { RightSidebar } from "@/components/right-sidebar";
-import { StatusProvider } from "@/components/status-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,22 +27,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <StatusProvider>
-        <div className="flex min-h-screen">
-          <nav className="w-60 shrink-0 border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="p-6 text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-              Workmate
-            </div>
-            <Suspense>
-              <SidebarNav />
-            </Suspense>
-          </nav>
-          <main className="flex-1 overflow-y-auto p-8">
-            {children}
-          </main>
-          <RightSidebar />
-        </div>
-        </StatusProvider>
+        {children}
       </body>
     </html>
   );
