@@ -10,13 +10,13 @@ export interface TerminalHandle {
 }
 
 interface TerminalProps {
-  personIndex: number;
-  personName: string;
+  machineId: string;
+  machineName: string;
   isActive?: boolean;
 }
 
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { personIndex, personName, isActive = true },
+  { machineId, machineName, isActive = true },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,11 +50,11 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     wsRef.current = null; // reset before new connection
 
     term.writeln(
-      `\x1b[1;36mConnecting to ${personName}...\x1b[0m`
+      `\x1b[1;36mConnecting to ${machineName}...\x1b[0m`
     );
 
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsProtocol}//${window.location.host}/api/terminal?personIndex=${personIndex}`;
+    const wsUrl = `${wsProtocol}//${window.location.host}/api/terminal?machineId=${machineId}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -100,7 +100,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       ws.close();
       term.dispose();
     };
-  }, [personIndex, personName]);
+  }, [machineId, machineName]);
 
   useImperativeHandle(ref, () => ({
     sendCommand: (command: string) => {

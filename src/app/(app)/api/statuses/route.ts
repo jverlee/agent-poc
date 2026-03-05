@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
-import { people } from "@/lib/people";
+import { getWorkspaceMachines } from "@/lib/supabase/machines";
+import { getActiveWorkspace } from "@/lib/supabase/workspaces";
 import { checkSSHConnectivity } from "@/lib/ssh";
 
 export async function GET() {
+  const activeWorkspace = await getActiveWorkspace();
+  if (!activeWorkspace) {
+    return NextResponse.json({ statuses: {} });
+  }
+
+  const machines = await getWorkspaceMachines(activeWorkspace.id);
+
   const results = await Promise.allSettled(
-    people.map(async (person, index) => {
-      if (!person.enabled || !person.ip) {
-        return { key: String(index), state: "disabled" };
+    machines.map(async (machine) => {
+      if (!machine.enabled || !machine.ip) {
+        return { key: machine.id, state: "disabled" };
       }
-      const isOnline = await checkSSHConnectivity(person.ip);
-      return { key: String(index), state: isOnline ? "started" : "stopped" };
+      const isOnline = await checkSSHConnectivity(machine.ip);
+      return { key: machine.id, state: isOnline ? "started" : "stopped" };
     })
   );
 

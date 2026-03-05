@@ -1,7 +1,6 @@
 "use client";
 
 interface ConnectionFormProps {
-  personIndex: number;
   ip: string | null;
   machineState?: string | null;
   cpus?: number | null;

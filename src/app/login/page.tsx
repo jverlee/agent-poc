@@ -1,21 +1,29 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get("invite_token");
+  const authError = searchParams.get("error");
 
   async function handleGoogleLogin() {
     setLoading(true);
     setError(null);
 
     const supabase = createClient();
+    const redirectTo = inviteToken
+      ? `${window.location.origin}/auth/callback?invite_token=${inviteToken}`
+      : `${window.location.origin}/auth/callback`;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo,
       },
     });
 
@@ -32,12 +40,14 @@ export default function LoginPage() {
           Workmate
         </h1>
         <p className="mb-8 text-center text-sm text-zinc-500">
-          Sign in to continue
+          {inviteToken
+            ? "Sign in to accept your invitation"
+            : "Sign in to continue"}
         </p>
 
-        {error && (
+        {(error || authError) && (
           <div className="mb-4 rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-400">
-            {error}
+            {error || authError?.replace(/_/g, " ")}
           </div>
         )}
 
@@ -68,5 +78,13 @@ export default function LoginPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -1,28 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { people } from "@/lib/people";
+import { getMachineById } from "@/lib/supabase/machines";
 import { getDropletByIp, restartDroplet } from "@/lib/digitalocean";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { personIndex } = body;
+  const { machineId } = body;
 
-  if (personIndex === undefined) {
+  if (!machineId) {
     return NextResponse.json(
-      { error: "personIndex is required" },
+      { error: "machineId is required" },
       { status: 400 }
     );
   }
 
-  const person = people[personIndex];
-  if (!person || !person.enabled || !person.ip) {
+  const machine = await getMachineById(machineId);
+  if (!machine || !machine.enabled || !machine.ip) {
     return NextResponse.json(
-      { error: "Agent not available" },
+      { error: "Machine not available" },
       { status: 404 }
     );
   }
 
   try {
-    const droplet = await getDropletByIp(person.ip);
+    const droplet = await getDropletByIp(machine.ip);
     if (!droplet) {
       return NextResponse.json(
         { error: "Droplet not found for this IP" },

@@ -1,5 +1,6 @@
--- 4. Auto-create profile + personal workspace on signup
--- If the user has pending invitations, join those workspaces instead.
+-- 11. Updated handle_new_user to check for pending invitations
+-- If a new user has pending invitations, add them to those workspaces
+-- and do NOT create a personal workspace.
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -87,7 +88,3 @@ begin
   return new;
 end;
 $handle_new_user$;
-
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();

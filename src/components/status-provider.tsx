@@ -6,12 +6,12 @@ type StatusMap = Record<string, string | null>;
 
 interface StatusContextValue {
   statuses: StatusMap;
-  setAgentStatus: (personIndex: number, state: string | null) => void;
+  setMachineStatus: (machineId: string, state: string | null) => void;
 }
 
 const StatusContext = createContext<StatusContextValue>({
   statuses: {},
-  setAgentStatus: () => {},
+  setMachineStatus: () => {},
 });
 
 export function useStatuses() {
@@ -39,15 +39,15 @@ export function StatusProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [fetchAllStatuses]);
 
-  const setAgentStatus = useCallback(
-    (personIndex: number, state: string | null) => {
-      setStatuses((prev) => ({ ...prev, [String(personIndex)]: state }));
+  const setMachineStatus = useCallback(
+    (machineId: string, state: string | null) => {
+      setStatuses((prev) => ({ ...prev, [machineId]: state }));
     },
     []
   );
 
   return (
-    <StatusContext.Provider value={{ statuses, setAgentStatus }}>
+    <StatusContext.Provider value={{ statuses, setMachineStatus }}>
       {children}
     </StatusContext.Provider>
   );

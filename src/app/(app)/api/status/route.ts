@@ -1,28 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { people } from "@/lib/people";
+import { getMachineById } from "@/lib/supabase/machines";
 import { checkSSHConnectivity } from "@/lib/ssh";
 import { getDropletByIp } from "@/lib/digitalocean";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { personIndex } = body;
+  const { machineId } = body;
 
-  if (personIndex === undefined) {
+  if (!machineId) {
     return NextResponse.json(
-      { error: "personIndex is required" },
+      { error: "machineId is required" },
       { status: 400 }
     );
   }
 
-  const person = people[personIndex];
-  if (!person) {
+  const machine = await getMachineById(machineId);
+  if (!machine) {
     return NextResponse.json(
-      { error: "Person not found" },
+      { error: "Machine not found" },
       { status: 404 }
     );
   }
 
-  if (!person.enabled || !person.ip) {
+  if (!machine.enabled || !machine.ip) {
     return NextResponse.json({
       state: "disabled",
       cpus: null,
@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const [isOnline, droplet] = await Promise.all([
-      checkSSHConnectivity(person.ip),
-      getDropletByIp(person.ip).catch(() => null),
+      checkSSHConnectivity(machine.ip),
+      getDropletByIp(machine.ip).catch(() => null),
     ]);
 
     return NextResponse.json({
