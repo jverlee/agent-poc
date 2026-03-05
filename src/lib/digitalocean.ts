@@ -39,6 +39,23 @@ export async function getDropletByIp(
 }
 
 /**
+ * Delete (destroy) a droplet permanently.
+ */
+export async function deleteDroplet(dropletId: number): Promise<void> {
+  const res = await fetch(`${DO_API_BASE}/droplets/${dropletId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${getToken()}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`DigitalOcean API error (${res.status}): ${text}`);
+  }
+}
+
+/**
  * Power cycle (restart) a droplet.
  */
 export async function restartDroplet(dropletId: number): Promise<void> {

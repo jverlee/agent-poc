@@ -62,7 +62,7 @@ export default async function AppLayout({
           </div>
         </nav>
         <main className="flex-1 overflow-y-auto p-8">{children}</main>
-        <RightSidebar />
+        <RightSidebar machines={machines} />
       </div>
     </StatusProvider>
   );
