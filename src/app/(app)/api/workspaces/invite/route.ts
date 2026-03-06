@@ -67,13 +67,23 @@ export async function POST(request: Request) {
     }
   }
 
-  // Upsert invitation (handles re-inviting same email)
-  const { data: invitation, error } = await supabase
+  // Check for existing invitation
+  const normalizedEmail = email.toLowerCase().trim();
+  const { data: existing } = await supabase
     .from("workspace_invitations")
-    .upsert(
-      {
-        workspace_id: activeWorkspace.id,
-        email: email.toLowerCase().trim(),
+    .select("id")
+    .eq("workspace_id", activeWorkspace.id)
+    .eq("email", normalizedEmail)
+    .maybeSingle();
+
+  let invitation;
+  let error;
+
+  if (existing) {
+    // Update existing invitation with new token and expiry
+    ({ data: invitation, error } = await supabase
+      .from("workspace_invitations")
+      .update({
         role,
         invited_by: user.id,
         status: "pending",
@@ -81,16 +91,33 @@ export async function POST(request: Request) {
         expires_at: new Date(
           Date.now() + 7 * 24 * 60 * 60 * 1000
         ).toISOString(),
-      },
-      { onConflict: "workspace_id,email" }
-    )
-    .select()
-    .single();
+      })
+      .eq("id", existing.id)
+      .select()
+      .single());
+  } else {
+    // Create new invitation
+    ({ data: invitation, error } = await supabase
+      .from("workspace_invitations")
+      .insert({
+        workspace_id: activeWorkspace.id,
+        email: normalizedEmail,
+        role,
+        invited_by: user.id,
+        status: "pending",
+        token: crypto.randomUUID(),
+        expires_at: new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+      })
+      .select()
+      .single());
+  }
 
   if (error) {
     console.error("Failed to create invitation:", error);
     return NextResponse.json(
-      { error: "Failed to create invitation" },
+      { error: "Failed to create invitation", details: error.message },
       { status: 500 }
     );
   }
@@ -102,7 +129,7 @@ export async function POST(request: Request) {
   try {
     const resend = getResend();
     await resend.emails.send({
-      from: "Workmate <onboarding@resend.dev>",
+      from: "Workmate <invites@pigeon.sendwithmanifest.com>",
       to: email.toLowerCase().trim(),
       subject: `You've been invited to ${activeWorkspace.name}`,
       html: `

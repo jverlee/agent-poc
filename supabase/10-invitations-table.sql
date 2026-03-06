@@ -35,5 +35,5 @@ create policy "users_view_own_invitations"
   on public.workspace_invitations
   for select
   using (
-    email = (select email from auth.users where id = auth.uid())
+    email = (auth.jwt() ->> 'email')
   );

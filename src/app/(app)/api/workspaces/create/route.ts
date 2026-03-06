@@ -38,17 +38,20 @@ export async function POST(request: NextRequest) {
     slug = `${slug}-${Date.now().toString(36)}`;
   }
 
-  // Create workspace
-  const { data: workspace, error: wsError } = await supabase
+  // Create workspace (generate ID upfront so we can add the member
+  // before needing to SELECT — the SELECT RLS policy requires membership)
+  const workspaceId = crypto.randomUUID();
+  const trimmedName = name.trim();
+
+  const { error: wsError } = await supabase
     .from("workspaces")
     .insert({
-      name: name.trim(),
+      id: workspaceId,
+      name: trimmedName,
       slug,
       is_personal: false,
       created_by: user.id,
-    })
-    .select()
-    .single();
+    });
 
   if (wsError) {
     return NextResponse.json(
@@ -61,7 +64,7 @@ export async function POST(request: NextRequest) {
   const { error: memberError } = await supabase
     .from("workspace_members")
     .insert({
-      workspace_id: workspace.id,
+      workspace_id: workspaceId,
       user_id: user.id,
       role: "owner",
     });
@@ -77,10 +80,12 @@ export async function POST(request: NextRequest) {
   await supabase
     .from("profiles")
     .update({
-      active_workspace_id: workspace.id,
+      active_workspace_id: workspaceId,
       updated_at: new Date().toISOString(),
     })
     .eq("id", user.id);
 
-  return NextResponse.json({ workspace });
+  return NextResponse.json({
+    workspace: { id: workspaceId, name: trimmedName, slug, is_personal: false },
+  });
 }

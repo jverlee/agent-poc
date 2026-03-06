@@ -61,6 +61,10 @@ create policy "Members can read their workspaces"
   on public.workspaces for select
   using (id in (select public.get_user_workspace_ids(auth.uid())));
 
+create policy "Authenticated users can create workspaces"
+  on public.workspaces for insert
+  with check (auth.uid() is not null);
+
 create policy "Owners and admins can update workspaces"
   on public.workspaces for update
   using (public.user_has_workspace_role(auth.uid(), id, array['owner', 'admin']));
