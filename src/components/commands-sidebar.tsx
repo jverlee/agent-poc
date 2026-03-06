@@ -146,6 +146,13 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
 
   const installOpenclawCmd = commands.find((c) => c.label === "Install OpenClaw")!;
 
+  const applyModelCmd: Command = {
+    label: "Apply Model",
+    command: `sed -i '/^OPENROUTER_/d' /root/.openclaw/.env 2>/dev/null; printf 'OPENROUTER_API_KEY=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\\nOPENROUTER_MODEL=moonshotai/kimi-k2.5\\n' >> /root/.openclaw/.env && echo "Model applied: moonshotai/kimi-k2.5"`,
+    icon: "🤖",
+    group: "openclaw",
+  };
+
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       <div className="p-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -164,8 +171,14 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
           <span className="w-5 text-center text-xs">{installOpenclawCmd.icon}</span>
           <span>{installOpenclawCmd.label}</span>
         </button>
+        <button
+          onClick={() => runCommand(applyModelCmd)}
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          <span className="w-5 text-center text-xs">{applyModelCmd.icon}</span>
+          <span>{applyModelCmd.label}</span>
+        </button>
         {[
-          { label: "Apply Model", icon: "🤖" },
           { label: "Install Brave API key", icon: "🔑" },
           { label: "Install Skill 1", icon: "📦" },
           { label: "Install Skill 2", icon: "📦" },
