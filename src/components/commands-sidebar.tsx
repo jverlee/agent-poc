@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { Machine } from "@/lib/supabase/machines";
 
@@ -69,30 +69,6 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
   const [destroying, setDestroying] = useState(false);
   const [installingSkill, setInstallingSkill] = useState<string | null>(null);
   const [allCommandsOpen, setAllCommandsOpen] = useState(false);
-  const [slackFormOpen, setSlackFormOpen] = useState(false);
-  const [slackBotToken, setSlackBotToken] = useState("");
-  const [slackAppToken, setSlackAppToken] = useState("");
-
-  // Detect bot token returning from Slack OAuth callback
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const botToken = params.get("slack_bot_token");
-    if (botToken) {
-      setSlackBotToken(botToken);
-      setSlackFormOpen(true);
-      const url = new URL(window.location.href);
-      url.searchParams.delete("slack_bot_token");
-      url.searchParams.delete("slack_error");
-      window.history.replaceState({}, "", url.toString());
-    }
-    const slackError = params.get("slack_error");
-    if (slackError) {
-      alert(`Slack connection failed: ${slackError}`);
-      const url = new URL(window.location.href);
-      url.searchParams.delete("slack_error");
-      window.history.replaceState({}, "", url.toString());
-    }
-  }, []);
 
   function runCommand(cmd: Command) {
     window.dispatchEvent(
@@ -167,42 +143,6 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
     }
   }
 
-  function handleSlackOAuth() {
-    const clientId = process.env.NEXT_PUBLIC_SLACK_CLIENT_ID;
-    if (!clientId) {
-      alert("Slack OAuth not configured. Set NEXT_PUBLIC_SLACK_CLIENT_ID.");
-      return;
-    }
-    const redirectUri = `${window.location.origin}/auth/slack/callback`;
-    const scopes = "channels:history,channels:read,chat:write,connections:write";
-    const url = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(machineId)}`;
-    window.location.href = url;
-  }
-
-  function handleSlackManualSubmit() {
-    const bot = slackBotToken.trim();
-    const app = slackAppToken.trim();
-    if (!bot || !app) {
-      alert("Both bot token and app-level token are required.");
-      return;
-    }
-    if (!/^xoxb-[\w-]+$/.test(bot)) {
-      alert("Invalid bot token format. Expected xoxb-...");
-      return;
-    }
-    if (!/^xapp-[\w-]+$/.test(app)) {
-      alert("Invalid app-level token format. Expected xapp-...");
-      return;
-    }
-    window.dispatchEvent(
-      new CustomEvent("terminal-send-command", {
-        detail: `openclaw channels add --channel slack --token ${bot} --app-token ${app}`,
-      })
-    );
-    setSlackBotToken("");
-    setSlackAppToken("");
-    setSlackFormOpen(false);
-  }
 
   const installOpenclawCmd = commands.find((c) => c.label === "Install OpenClaw")!;
 
@@ -224,55 +164,26 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
           <span className="w-5 text-center text-xs">{installOpenclawCmd.icon}</span>
           <span>{installOpenclawCmd.label}</span>
         </button>
-        <button
-          onClick={handleSlackOAuth}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          <span className="w-5 text-center text-xs">🔗</span>
-          <span>Connect Slack (OAuth)</span>
-        </button>
-        <button
-          onClick={() => {
-            setSlackFormOpen((v) => !v);
-            if (!slackFormOpen) {
-              window.open("https://api.slack.com/apps", "_blank");
-            }
-          }}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          <span className="w-5 text-center text-xs">📋</span>
-          <span>Connect Slack (Manual)</span>
-        </button>
-        {slackFormOpen && (
-          <div className="mt-1 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800">
-            <label className="mb-1 block text-xs font-medium text-zinc-500">
-              Bot Token (xoxb-...)
-            </label>
-            <input
-              type="password"
-              value={slackBotToken}
-              onChange={(e) => setSlackBotToken(e.target.value)}
-              placeholder="xoxb-..."
-              className="mb-2 w-full rounded border border-zinc-300 bg-zinc-50 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
-            />
-            <label className="mb-1 block text-xs font-medium text-zinc-500">
-              App-Level Token (xapp-...)
-            </label>
-            <input
-              type="password"
-              value={slackAppToken}
-              onChange={(e) => setSlackAppToken(e.target.value)}
-              placeholder="xapp-..."
-              className="mb-2 w-full rounded border border-zinc-300 bg-zinc-50 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
-            />
-            <button
-              onClick={handleSlackManualSubmit}
-              className="w-full rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-            >
-              Connect
-            </button>
-          </div>
-        )}
+        {[
+          { label: "Apply Model", icon: "🤖" },
+          { label: "Install Brave API key", icon: "🔑" },
+          { label: "Install Skill 1", icon: "📦" },
+          { label: "Install Skill 2", icon: "📦" },
+          { label: "Install Skill 3", icon: "📦" },
+          { label: "Provision email", icon: "📧" },
+          { label: "Provision phone number", icon: "📱" },
+          { label: "Provision text number", icon: "💬" },
+          { label: "Welcome user (using text or phone)", icon: "👋" },
+        ].map((item) => (
+          <button
+            key={item.label}
+            onClick={() => alert("Not yet setup")}
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <span className="w-5 text-center text-xs">{item.icon}</span>
+            <span>{item.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* All Commands (collapsible, collapsed by default) */}
