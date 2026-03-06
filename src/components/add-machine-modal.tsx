@@ -29,6 +29,7 @@ const STEPS = [
   { key: "droplet", label: "Creating droplet" },
   { key: "ip", label: "Waiting for IP address" },
   { key: "saving", label: "Saving machine" },
+  { key: "ssh", label: "Connecting via SSH" },
 ] as const;
 
 type StepStatus = "pending" | "in_progress" | "done" | "error";
@@ -90,7 +91,7 @@ export function AddMachineModal({ open, onClose }: AddMachineModalProps) {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let completed = false;
+      let completedMachineId: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -105,7 +106,7 @@ export function AddMachineModal({ open, onClose }: AddMachineModalProps) {
           try {
             const event = JSON.parse(line);
             if (event.step === "complete" && event.status === "done") {
-              completed = true;
+              completedMachineId = event.machineId || null;
             } else if (event.step === "error" || event.status === "error") {
               setError(event.error || "An error occurred");
             } else {
@@ -117,12 +118,13 @@ export function AddMachineModal({ open, onClose }: AddMachineModalProps) {
         }
       }
 
-      if (completed) {
+      if (completedMachineId) {
         setName("");
         setRegion("nyc1");
         setSize("s-1vcpu-1gb");
         setSteps({});
         onClose();
+        router.push(`/?machine=${completedMachineId}`);
         router.refresh();
       }
     } catch (err) {
