@@ -68,6 +68,7 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
   const [restarting, setRestarting] = useState(false);
   const [destroying, setDestroying] = useState(false);
   const [installingSkill, setInstallingSkill] = useState<string | null>(null);
+  const [installingBrave, setInstallingBrave] = useState(false);
   const [allCommandsOpen, setAllCommandsOpen] = useState(false);
 
   function runCommand(cmd: Command) {
@@ -144,6 +145,26 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
   }
 
 
+  async function handleInstallBrave() {
+    if (installingBrave) return;
+    setInstallingBrave(true);
+    try {
+      const res = await fetch("/api/install-skill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skill: "brave-search", machineId }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert(`Failed to install Brave Search: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Failed to install Brave Search: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setInstallingBrave(false);
+    }
+  }
+
   const installOpenclawCmd = commands.find((c) => c.label === "Install OpenClaw")!;
 
   return (
@@ -164,9 +185,19 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
           <span className="w-5 text-center text-xs">{installOpenclawCmd.icon}</span>
           <span>{installOpenclawCmd.label}</span>
         </button>
+        <button
+          onClick={handleInstallBrave}
+          disabled={installingBrave}
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          <span className="w-5 text-center text-xs">🔑</span>
+          <span>{installingBrave ? "Installing\u2026" : "Install Brave Search"}</span>
+          {installingBrave && (
+            <span className="ml-auto text-xs text-zinc-400 animate-pulse">...</span>
+          )}
+        </button>
         {[
           { label: "Apply Model", icon: "🤖" },
-          { label: "Install Brave API key", icon: "🔑" },
           { label: "Install Skill 1", icon: "📦" },
           { label: "Install Skill 2", icon: "📦" },
           { label: "Install Skill 3", icon: "📦" },
