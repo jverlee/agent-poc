@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { Machine } from "@/lib/supabase/machines";
 
@@ -68,6 +68,31 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
   const [restarting, setRestarting] = useState(false);
   const [destroying, setDestroying] = useState(false);
   const [installingSkill, setInstallingSkill] = useState<string | null>(null);
+  const [allCommandsOpen, setAllCommandsOpen] = useState(false);
+  const [slackFormOpen, setSlackFormOpen] = useState(false);
+  const [slackBotToken, setSlackBotToken] = useState("");
+  const [slackAppToken, setSlackAppToken] = useState("");
+
+  // Detect bot token returning from Slack OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const botToken = params.get("slack_bot_token");
+    if (botToken) {
+      setSlackBotToken(botToken);
+      setSlackFormOpen(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("slack_bot_token");
+      url.searchParams.delete("slack_error");
+      window.history.replaceState({}, "", url.toString());
+    }
+    const slackError = params.get("slack_error");
+    if (slackError) {
+      alert(`Slack connection failed: ${slackError}`);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("slack_error");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
 
   function runCommand(cmd: Command) {
     window.dispatchEvent(
@@ -142,83 +167,208 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
     }
   }
 
+  function handleSlackOAuth() {
+    const clientId = process.env.NEXT_PUBLIC_SLACK_CLIENT_ID;
+    if (!clientId) {
+      alert("Slack OAuth not configured. Set NEXT_PUBLIC_SLACK_CLIENT_ID.");
+      return;
+    }
+    const redirectUri = `${window.location.origin}/auth/slack/callback`;
+    const scopes = "channels:history,channels:read,chat:write,connections:write";
+    const url = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(machineId)}`;
+    window.location.href = url;
+  }
+
+  function handleSlackManualSubmit() {
+    const bot = slackBotToken.trim();
+    const app = slackAppToken.trim();
+    if (!bot || !app) {
+      alert("Both bot token and app-level token are required.");
+      return;
+    }
+    if (!/^xoxb-[\w-]+$/.test(bot)) {
+      alert("Invalid bot token format. Expected xoxb-...");
+      return;
+    }
+    if (!/^xapp-[\w-]+$/.test(app)) {
+      alert("Invalid app-level token format. Expected xapp-...");
+      return;
+    }
+    window.dispatchEvent(
+      new CustomEvent("terminal-send-command", {
+        detail: `openclaw channels add --channel slack --token ${bot} --app-token ${app}`,
+      })
+    );
+    setSlackBotToken("");
+    setSlackAppToken("");
+    setSlackFormOpen(false);
+  }
+
+  const installOpenclawCmd = commands.find((c) => c.label === "Install OpenClaw")!;
+
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       <div className="p-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
         Shortcuts
       </div>
 
-      {GROUPS.map((group) => (
-        <div key={group.key}>
-          <div className="px-4 pt-3 pb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">
-            {group.label}
-          </div>
-          <div className="flex flex-col gap-1 px-3">
-            {commands
-              .filter((c) => c.group === group.key)
-              .map((cmd) => (
-                <button
-                  key={cmd.label}
-                  onClick={() => runCommand(cmd)}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <span className="w-5 text-center text-xs">{cmd.icon}</span>
-                  <span>{cmd.label}</span>
-                </button>
-              ))}
-          </div>
-        </div>
-      ))}
-
+      {/* Setup Flow */}
       <div className="px-4 pt-3 pb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">
-        Danger Zone
+        Setup Flow
       </div>
       <div className="flex flex-col gap-1 px-3">
         <button
-          onClick={handleRestart}
-          disabled={restarting}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          onClick={() => runCommand(installOpenclawCmd)}
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
-          <span className="w-5 text-center text-xs">🔄</span>
-          <span>{restarting ? "Restarting\u2026" : "Force Restart"}</span>
-          {restarting && (
-            <span className="ml-auto text-xs text-zinc-400 animate-pulse">...</span>
-          )}
+          <span className="w-5 text-center text-xs">{installOpenclawCmd.icon}</span>
+          <span>{installOpenclawCmd.label}</span>
         </button>
         <button
-          onClick={handleDestroy}
-          disabled={destroying}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30"
+          onClick={handleSlackOAuth}
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
-          <span className="w-5 text-center text-xs">💥</span>
-          <span>{destroying ? "Destroying\u2026" : "Destroy Machine"}</span>
-          {destroying && (
-            <span className="ml-auto text-xs text-red-400 animate-pulse">...</span>
-          )}
+          <span className="w-5 text-center text-xs">🔗</span>
+          <span>Connect Slack (OAuth)</span>
         </button>
+        <button
+          onClick={() => {
+            setSlackFormOpen((v) => !v);
+            if (!slackFormOpen) {
+              window.open("https://api.slack.com/apps", "_blank");
+            }
+          }}
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          <span className="w-5 text-center text-xs">📋</span>
+          <span>Connect Slack (Manual)</span>
+        </button>
+        {slackFormOpen && (
+          <div className="mt-1 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800">
+            <label className="mb-1 block text-xs font-medium text-zinc-500">
+              Bot Token (xoxb-...)
+            </label>
+            <input
+              type="password"
+              value={slackBotToken}
+              onChange={(e) => setSlackBotToken(e.target.value)}
+              placeholder="xoxb-..."
+              className="mb-2 w-full rounded border border-zinc-300 bg-zinc-50 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+            <label className="mb-1 block text-xs font-medium text-zinc-500">
+              App-Level Token (xapp-...)
+            </label>
+            <input
+              type="password"
+              value={slackAppToken}
+              onChange={(e) => setSlackAppToken(e.target.value)}
+              placeholder="xapp-..."
+              className="mb-2 w-full rounded border border-zinc-300 bg-zinc-50 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+            />
+            <button
+              onClick={handleSlackManualSubmit}
+              className="w-full rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Connect
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="px-4 pt-4 pb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-        Skills
-      </div>
-      <div className="flex flex-col gap-1 px-3 pb-4">
-        {skills.map((skill) => (
-          <button
-            key={skill.slug}
-            onClick={() => handleInstallSkill(skill)}
-            disabled={installingSkill === skill.slug}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            <span className="w-5 text-center text-xs">{skill.icon}</span>
-            <span>
-              {installingSkill === skill.slug ? "Installing\u2026" : skill.label}
-            </span>
-            {installingSkill === skill.slug && (
-              <span className="ml-auto text-xs text-zinc-400 animate-pulse">...</span>
-            )}
-          </button>
-        ))}
-      </div>
+      {/* All Commands (collapsible, collapsed by default) */}
+      <button
+        onClick={() => setAllCommandsOpen((v) => !v)}
+        className="mx-4 mt-4 mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+      >
+        <svg
+          className={`h-3.5 w-3.5 transition-transform ${allCommandsOpen ? "rotate-90" : ""}`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        All Commands
+      </button>
+
+      {allCommandsOpen && (
+        <>
+          {GROUPS.map((group) => (
+            <div key={group.key}>
+              <div className="px-4 pt-3 pb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                {group.label}
+              </div>
+              <div className="flex flex-col gap-1 px-3">
+                {commands
+                  .filter((c) => c.group === group.key)
+                  .map((cmd) => (
+                    <button
+                      key={cmd.label}
+                      onClick={() => runCommand(cmd)}
+                      className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      <span className="w-5 text-center text-xs">{cmd.icon}</span>
+                      <span>{cmd.label}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="px-4 pt-3 pb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">
+            Danger Zone
+          </div>
+          <div className="flex flex-col gap-1 px-3">
+            <button
+              onClick={handleRestart}
+              disabled={restarting}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <span className="w-5 text-center text-xs">🔄</span>
+              <span>{restarting ? "Restarting\u2026" : "Force Restart"}</span>
+              {restarting && (
+                <span className="ml-auto text-xs text-zinc-400 animate-pulse">...</span>
+              )}
+            </button>
+            <button
+              onClick={handleDestroy}
+              disabled={destroying}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/30"
+            >
+              <span className="w-5 text-center text-xs">💥</span>
+              <span>{destroying ? "Destroying\u2026" : "Destroy Machine"}</span>
+              {destroying && (
+                <span className="ml-auto text-xs text-red-400 animate-pulse">...</span>
+              )}
+            </button>
+          </div>
+
+          <div className="px-4 pt-4 pb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            Skills
+          </div>
+          <div className="flex flex-col gap-1 px-3 pb-4">
+            {skills.map((skill) => (
+              <button
+                key={skill.slug}
+                onClick={() => handleInstallSkill(skill)}
+                disabled={installingSkill === skill.slug}
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                <span className="w-5 text-center text-xs">{skill.icon}</span>
+                <span>
+                  {installingSkill === skill.slug ? "Installing\u2026" : skill.label}
+                </span>
+                {installingSkill === skill.slug && (
+                  <span className="ml-auto text-xs text-zinc-400 animate-pulse">...</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
