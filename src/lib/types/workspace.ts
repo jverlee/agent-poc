@@ -33,3 +33,16 @@ export interface WorkspaceWithRole {
   workspace: Workspace;
   role: WorkspaceRole;
 }
+
+export interface WorkspaceMemberWithProfile {
+  id: string;
+  user_id: string;
+  role: WorkspaceRole;
+  created_at: string;
+  profile: {
+    id: string;
+    email: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+}

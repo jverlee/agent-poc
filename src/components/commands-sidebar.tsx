@@ -33,7 +33,7 @@ const commands: Command[] = [
   { label: "View Logs", command: "openclaw logs --follow --limit 50", icon: "📋", group: "openclaw" },
   // Gateway
   { label: "Gateway Status", command: "openclaw gateway status", icon: "🟢", group: "gateway" },
-  { label: "Start Gateway", command: "openclaw gateway start", icon: "▶️", group: "gateway" },
+  { label: "Run Gateway", command: "openclaw gateway run", icon: "▶️", group: "gateway" },
   { label: "Stop Gateway", command: "openclaw gateway stop", icon: "⏹️", group: "gateway" },
   { label: "Restart Gateway", command: "openclaw gateway restart", icon: "🔁", group: "gateway" },
   { label: "Gateway Health", command: "openclaw health --verbose", icon: "💓", group: "gateway" },

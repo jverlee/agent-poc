@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
   const { name } = await request.json();
@@ -27,16 +27,9 @@ export async function POST(request: NextRequest) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-  // Ensure slug uniqueness
-  const { data: existing } = await supabase
-    .from("workspaces")
-    .select("id")
-    .eq("slug", slug)
-    .single();
-
-  if (existing) {
-    slug = `${slug}-${Date.now().toString(36)}`;
-  }
+  // Always append a short random suffix to guarantee uniqueness,
+  // since RLS hides other users' workspaces from the slug check
+  slug = `${slug}-${Date.now().toString(36)}`;
 
   // Create workspace (generate ID upfront so we can add the member
   // before needing to SELECT — the SELECT RLS policy requires membership)
@@ -60,8 +53,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Add user as owner
-  const { error: memberError } = await supabase
+  // Add user as owner (use service client to bypass RLS —
+  // the INSERT policy requires existing membership, which doesn't exist yet)
+  const serviceClient = createServiceClient();
+  const { error: memberError } = await serviceClient
     .from("workspace_members")
     .insert({
       workspace_id: workspaceId,
