@@ -32,7 +32,7 @@ export function InviteModal({ open, onClose }: InviteModalProps) {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Failed to send invitation");
+        setError(data.details || data.error || "Failed to send invitation");
         return;
       }
 
