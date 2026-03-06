@@ -14,20 +14,20 @@ interface TabbedTerminalProps {
   isActive: boolean;
 }
 
-let tabCounter = 0;
-
 export default function TabbedTerminal({
   machineId,
   machineName,
   isActive,
 }: TabbedTerminalProps) {
-  const [tabs, setTabs] = useState<Tab[]>(() => {
-    tabCounter += 1;
-    return [{ id: String(tabCounter), label: "Terminal 1" }];
-  });
+  const tabCounter = useRef(1);
+  const [tabs, setTabs] = useState<Tab[]>(() => [
+    { id: `${machineId}-1`, label: "Terminal 1" },
+  ]);
   const [activeTabId, setActiveTabId] = useState(() => tabs[0].id);
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
   const labelCounter = useRef(1);
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const setTerminalRef = useCallback(
     (tabId: string) => (handle: TerminalHandle | null) => {
@@ -42,13 +42,29 @@ export default function TabbedTerminal({
 
   function addTab() {
     labelCounter.current += 1;
-    tabCounter += 1;
+    tabCounter.current += 1;
     const newTab: Tab = {
-      id: String(tabCounter),
+      id: `${machineId}-${tabCounter.current}`,
       label: `Terminal ${labelCounter.current}`,
     };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
+  }
+
+  function startRenaming(tabId: string, currentLabel: string) {
+    setEditingTabId(tabId);
+    setEditValue(currentLabel);
+  }
+
+  function commitRename() {
+    if (editingTabId && editValue.trim()) {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === editingTabId ? { ...t, label: editValue.trim() } : t
+        )
+      );
+    }
+    setEditingTabId(null);
   }
 
   function closeTab(tabId: string) {
@@ -92,7 +108,24 @@ export default function TabbedTerminal({
                 : "border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30"
             }`}
           >
-            <span>{tab.label}</span>
+            {editingTabId === tab.id ? (
+              <input
+                autoFocus
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={commitRename}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitRename();
+                  if (e.key === "Escape") setEditingTabId(null);
+                }}
+                className="w-20 bg-transparent text-xs text-zinc-200 outline-none border-b border-zinc-500"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span onDoubleClick={() => startRenaming(tab.id, tab.label)}>
+                {tab.label}
+              </span>
+            )}
             {tabs.length > 1 && (
               <span
                 onClick={(e) => {

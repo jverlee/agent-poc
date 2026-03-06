@@ -17,9 +17,9 @@ export function RightSidebar({ machines }: { machines: Machine[] }) {
         {collapsed ? "\u2039" : "\u203A"}
       </button>
       <div
-        className={`overflow-hidden transition-all duration-200 ${collapsed ? "w-0" : "w-56"}`}
+        className={`h-full overflow-hidden transition-all duration-200 ${collapsed ? "w-0" : "w-56"}`}
       >
-        <div className="w-56">
+        <div className="h-full w-56 overflow-y-auto">
           <Suspense>
             <CommandsSidebar machines={machines} />
           </Suspense>

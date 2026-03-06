@@ -38,8 +38,8 @@ export default async function AppLayout({
 
   return (
     <StatusProvider>
-      <div className="flex min-h-screen">
-        <nav className="flex w-60 shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex h-screen overflow-hidden">
+        <nav className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="px-6 pb-4 pt-6">
             <div className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
               Workmate
