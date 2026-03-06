@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getActiveWorkspace } from "@/lib/supabase/workspaces";
 import { registerSSHKey, createDroplet, assignToProject, waitForDropletIp } from "@/lib/digitalocean";
+import { checkSSHConnectivity } from "@/lib/ssh";
 
 function readPublicKey(): string {
   const privateKeyPath = process.env.SSH_PRIVATE_KEY_PATH;
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      function send(event: { step: string; status: string; error?: string }) {
+      function send(event: { step: string; status: string; error?: string; machineId?: string }) {
         controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
       }
 
@@ -110,7 +111,22 @@ export async function POST(request: NextRequest) {
           send({ step: "saving", status: "error", error: dbError.message });
         } else {
           send({ step: "saving", status: "done" });
-          send({ step: "complete", status: "done" });
+
+          // 6. Wait for SSH connectivity
+          send({ step: "ssh", status: "in_progress" });
+          let sshReady = false;
+          for (let i = 0; i < 20; i++) {
+            sshReady = await checkSSHConnectivity(publicIp);
+            if (sshReady) break;
+            await new Promise((r) => setTimeout(r, 3000));
+          }
+          if (sshReady) {
+            send({ step: "ssh", status: "done" });
+          } else {
+            send({ step: "ssh", status: "error", error: "SSH connection timed out" });
+          }
+
+          send({ step: "complete", status: "done", machineId: machine!.id });
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
