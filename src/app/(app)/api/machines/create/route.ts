@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getActiveWorkspace } from "@/lib/supabase/workspaces";
 import { registerSSHKey, createDroplet, assignToProject, waitForDropletIp } from "@/lib/digitalocean";
 
@@ -87,9 +87,10 @@ export async function POST(request: NextRequest) {
         const publicIp = await waitForDropletIp(droplet.id);
         send({ step: "ip", status: "done" });
 
-        // 5. Save to database
+        // 5. Save to database (use service client to bypass RLS)
         send({ step: "saving", status: "in_progress" });
-        const { data: machine, error: dbError } = await supabase
+        const serviceClient = createServiceClient();
+        const { data: machine, error: dbError } = await serviceClient
           .from("machines")
           .insert({
             workspace_id: activeWorkspace.id,
