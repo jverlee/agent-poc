@@ -6,6 +6,7 @@ export interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   active_workspace_id: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
