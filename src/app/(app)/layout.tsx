@@ -4,6 +4,7 @@ import { RightSidebar } from "@/components/right-sidebar";
 import { StatusProvider } from "@/components/status-provider";
 import { LogoutButton } from "@/components/logout-button";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { FlushOnboardingMetadata } from "@/components/flush-onboarding-metadata";
 import { createClient } from "@/lib/supabase/server";
 import {
   getCurrentProfile,
@@ -38,6 +39,7 @@ export default async function AppLayout({
 
   return (
     <StatusProvider>
+      <FlushOnboardingMetadata />
       <div className="flex h-screen overflow-hidden">
         <nav className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="px-6 pb-4 pt-6">
