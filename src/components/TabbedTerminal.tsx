@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Terminal, { TerminalHandle } from "./Terminal";
+import TerminalInput from "./terminal-input";
 
 interface Tab {
   id: string;
   label: string;
+  sessionName: string;
+  autoCommand?: string;
 }
 
 interface TabbedTerminalProps {
@@ -14,20 +17,90 @@ interface TabbedTerminalProps {
   isActive: boolean;
 }
 
+const CLAUDE_AUTO_COMMAND =
+  "command -v claude >/dev/null 2>&1 && claude --continue || echo 'Claude Code not installed. Run: npm install -g @anthropic-ai/claude-code'";
+
+function getStorageKey(machineId: string) {
+  return `lome-tabs-${machineId}`;
+}
+
+function makeSessionName(machineId: string, suffix: string) {
+  return `lome-${machineId.slice(0, 8)}-${suffix}`;
+}
+
+function loadTabs(machineId: string): { tabs: Tab[]; activeTabId: string } | null {
+  try {
+    const raw = localStorage.getItem(getStorageKey(machineId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed.tabs?.length > 0 && parsed.activeTabId) return parsed;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function saveTabs(machineId: string, tabs: Tab[], activeTabId: string) {
+  try {
+    localStorage.setItem(
+      getStorageKey(machineId),
+      JSON.stringify({ tabs, activeTabId })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function createDefaultTabs(machineId: string): Tab[] {
+  return [
+    {
+      id: `${machineId}-claude`,
+      label: "Claude Code",
+      sessionName: makeSessionName(machineId, "claude"),
+      autoCommand: CLAUDE_AUTO_COMMAND,
+    },
+  ];
+}
+
 export default function TabbedTerminal({
   machineId,
   machineName,
   isActive,
 }: TabbedTerminalProps) {
   const tabCounter = useRef(1);
-  const [tabs, setTabs] = useState<Tab[]>(() => [
-    { id: `${machineId}-1`, label: "Terminal 1" },
-  ]);
-  const [activeTabId, setActiveTabId] = useState(() => tabs[0].id);
-  const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
   const labelCounter = useRef(1);
+
+  const [tabs, setTabs] = useState<Tab[]>(() => {
+    const saved = loadTabs(machineId);
+    if (saved) {
+      // Find highest tab number for counter
+      for (const t of saved.tabs) {
+        const match = t.id.match(/-(\d+)$/);
+        if (match) {
+          const n = parseInt(match[1], 10);
+          if (n >= tabCounter.current) tabCounter.current = n;
+          if (n >= labelCounter.current) labelCounter.current = n;
+        }
+      }
+      return saved.tabs;
+    }
+    return createDefaultTabs(machineId);
+  });
+
+  const [activeTabId, setActiveTabId] = useState(() => {
+    const saved = loadTabs(machineId);
+    if (saved) return saved.activeTabId;
+    return `${machineId}-claude`;
+  });
+
+  const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  // Persist tab state on changes
+  useEffect(() => {
+    saveTabs(machineId, tabs, activeTabId);
+  }, [machineId, tabs, activeTabId]);
 
   const setTerminalRef = useCallback(
     (tabId: string) => (handle: TerminalHandle | null) => {
@@ -46,6 +119,7 @@ export default function TabbedTerminal({
     const newTab: Tab = {
       id: `${machineId}-${tabCounter.current}`,
       label: `Terminal ${labelCounter.current}`,
+      sessionName: makeSessionName(machineId, String(tabCounter.current)),
     };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
@@ -95,7 +169,7 @@ export default function TabbedTerminal({
   }, [activeTabId, isActive]);
 
   return (
-    <div className="flex h-full flex-col rounded-lg border border-zinc-800 overflow-hidden">
+    <div className="flex h-full flex-col rounded-lg overflow-hidden">
       {/* Tab bar */}
       <div className="flex shrink-0 items-center border-b border-zinc-800 bg-zinc-900">
         {tabs.map((tab) => (
@@ -161,10 +235,23 @@ export default function TabbedTerminal({
               machineId={machineId}
               machineName={machineName}
               isActive={isActive && tab.id === activeTabId}
+              sessionName={tab.sessionName}
+              autoCommand={tab.autoCommand}
             />
           </div>
         ))}
       </div>
+
+      {/* Compose bar */}
+      <TerminalInput
+        machineId={machineId}
+        onSend={(text) => {
+          const activeTerminal = terminalRefs.current.get(activeTabId);
+          if (activeTerminal) {
+            activeTerminal.sendCommand(text);
+          }
+        }}
+      />
     </div>
   );
 }
