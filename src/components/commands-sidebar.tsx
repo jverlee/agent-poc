@@ -190,7 +190,7 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
           onClick={() =>
             runCommand({
               label: "Install Claude Code",
-              command: "curl -fsSL https://claude.ai/install.sh | bash",
+              command: "curl -fsSL https://claude.ai/install.sh | bash && echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.bashrc && source ~/.bashrc",
               icon: "📦",
               group: "machine",
             })
