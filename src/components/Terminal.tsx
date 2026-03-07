@@ -15,14 +15,21 @@ interface TerminalProps {
   isActive?: boolean;
   sessionName?: string;
   autoCommand?: string;
+  onAuthUrl?: (url: string | null) => void;
 }
 
 const MAX_RECONNECT_ATTEMPTS = 10;
 const INITIAL_RECONNECT_DELAY = 2000;
 const MAX_RECONNECT_DELAY = 30000;
 
+function stripAnsi(str: string): string {
+  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+}
+
+const AUTH_URL_PATTERN = /https:\/\/claude\.ai\/oauth\/authorize[^\s\x1b]*/;
+
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { machineId, machineName, isActive = true, sessionName, autoCommand },
+  { machineId, machineName, isActive = true, sessionName, autoCommand, onAuthUrl },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,6 +39,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   const unmountedRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const authBufferRef = useRef("");
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -106,6 +114,21 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
 
       ws.onmessage = (event) => {
         term.write(event.data);
+        if (onAuthUrl) {
+          const text = typeof event.data === "string" ? event.data : "";
+          authBufferRef.current += text;
+          // Keep buffer from growing unbounded (last 4KB is plenty)
+          if (authBufferRef.current.length > 4096) {
+            authBufferRef.current = authBufferRef.current.slice(-4096);
+          }
+          const clean = stripAnsi(authBufferRef.current);
+          const match = clean.match(AUTH_URL_PATTERN);
+          if (match) {
+            onAuthUrl(match[0]);
+            // Clear buffer so we don't re-match endlessly
+            authBufferRef.current = "";
+          }
+        }
       };
 
       ws.onclose = () => {

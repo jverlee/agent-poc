@@ -18,7 +18,7 @@ interface TabbedTerminalProps {
 }
 
 const CLAUDE_AUTO_COMMAND =
-  "command -v claude >/dev/null 2>&1 && claude --continue || echo 'Claude Code not installed. Run: npm install -g @anthropic-ai/claude-code'";
+  "command -v claude >/dev/null 2>&1 && (claude --continue || claude) || echo 'Claude Code not installed. Run: npm install -g @anthropic-ai/claude-code'";
 
 function getStorageKey(machineId: string) {
   return `lome-tabs-${machineId}`;
@@ -96,6 +96,9 @@ export default function TabbedTerminal({
   const terminalRefs = useRef<Map<string, TerminalHandle>>(new Map());
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [authUrl, setAuthUrl] = useState<string | null>(null);
+  const [authCode, setAuthCode] = useState("");
+  const [authStep, setAuthStep] = useState<"sign-in" | "paste-code">("sign-in");
 
   // Persist tab state on changes
   useEffect(() => {
@@ -224,6 +227,75 @@ export default function TabbedTerminal({
 
       {/* Terminal panels */}
       <div className="min-h-0 flex-1 relative">
+        {authUrl && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4">
+              <div className="text-lg font-medium text-zinc-200">Claude needs to sign in</div>
+              {authStep === "sign-in" ? (
+                <>
+                  <p className="text-sm text-zinc-400 max-w-sm text-center">
+                    Click below to open the authentication page in your browser.
+                  </p>
+                  <button
+                    onClick={() => {
+                      window.open(authUrl, "_blank");
+                      setAuthStep("paste-code");
+                    }}
+                    className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
+                  >
+                    Open Sign-In
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-zinc-400 max-w-sm text-center">
+                    Paste the code from the browser below.
+                  </p>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (authCode.trim()) {
+                        const activeTerminal = terminalRefs.current.get(activeTabId);
+                        if (activeTerminal) {
+                          activeTerminal.sendCommand(authCode.trim());
+                        }
+                        setAuthUrl(null);
+                        setAuthCode("");
+                        setAuthStep("sign-in");
+                      }
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <input
+                      autoFocus
+                      type="text"
+                      value={authCode}
+                      onChange={(e) => setAuthCode(e.target.value)}
+                      placeholder="Paste code here"
+                      className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 outline-none focus:border-blue-500 w-64"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
+                    >
+                      Submit
+                    </button>
+                  </form>
+                </>
+              )}
+              <button
+                onClick={() => {
+                  setAuthUrl(null);
+                  setAuthCode("");
+                  setAuthStep("sign-in");
+                }}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
         {tabs.map((tab) => (
           <div
             key={tab.id}
@@ -237,6 +309,7 @@ export default function TabbedTerminal({
               isActive={isActive && tab.id === activeTabId}
               sessionName={tab.sessionName}
               autoCommand={tab.autoCommand}
+              onAuthUrl={tab.id === activeTabId ? setAuthUrl : undefined}
             />
           </div>
         ))}
