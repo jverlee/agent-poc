@@ -30,6 +30,8 @@ export async function POST(request: NextRequest) {
     await new Promise<void>((resolve, reject) => {
       conn.exec("mkdir -p /root/uploads", (err, stream) => {
         if (err) return reject(err);
+        stream.on("data", () => {});
+        stream.stderr.on("data", () => {});
         stream.on("close", () => resolve());
       });
     });
