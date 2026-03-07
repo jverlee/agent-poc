@@ -13,18 +13,28 @@ interface TerminalProps {
   machineId: string;
   machineName: string;
   isActive?: boolean;
+  sessionName?: string;
+  autoCommand?: string;
 }
 
+const MAX_RECONNECT_ATTEMPTS = 10;
+const INITIAL_RECONNECT_DELAY = 2000;
+const MAX_RECONNECT_DELAY = 30000;
+
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { machineId, machineName, isActive = true },
+  { machineId, machineName, isActive = true, sessionName, autoCommand },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const unmountedRef = useRef(false);
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    unmountedRef.current = false;
     if (!containerRef.current) return;
 
     const term = new XTerm({
@@ -64,60 +74,92 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
 
     termRef.current = term;
     fitRef.current = fit;
-    wsRef.current = null; // reset before new connection
 
-    term.writeln(
-      `\x1b[1;36mConnecting to ${machineName}...\x1b[0m`
-    );
+    function buildWsUrl() {
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      let url = `${wsProtocol}//${window.location.host}/api/terminal?machineId=${machineId}`;
+      if (sessionName) url += `&sessionName=${encodeURIComponent(sessionName)}`;
+      if (autoCommand) url += `&autoCommand=${encodeURIComponent(autoCommand)}`;
+      return url;
+    }
 
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsProtocol}//${window.location.host}/api/terminal?machineId=${machineId}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    function connect() {
+      if (unmountedRef.current) return;
 
-    ws.onopen = () => {
-      term.writeln("\x1b[1;32mConnected\x1b[0m");
-      ws.send(JSON.stringify({ cols: term.cols, rows: term.rows }));
-    };
+      const isReconnect = reconnectAttemptRef.current > 0;
+      if (!isReconnect) {
+        term.writeln(`\x1b[1;36mConnecting to ${machineName}...\x1b[0m`);
+      }
 
-    ws.onmessage = (event) => {
-      term.write(event.data);
-    };
+      const ws = new WebSocket(buildWsUrl());
+      wsRef.current = ws;
 
-    ws.onclose = () => {
-      term.writeln("\r\n\x1b[1;31mDisconnected\x1b[0m");
-    };
+      ws.onopen = () => {
+        reconnectAttemptRef.current = 0;
+        if (isReconnect) {
+          term.writeln("\x1b[1;32mReconnected\x1b[0m");
+        } else {
+          term.writeln("\x1b[1;32mConnected\x1b[0m");
+        }
+        ws.send(JSON.stringify({ cols: term.cols, rows: term.rows }));
+      };
 
-    ws.onerror = () => {
-      term.writeln("\r\n\x1b[1;31mWebSocket error\x1b[0m");
-    };
+      ws.onmessage = (event) => {
+        term.write(event.data);
+      };
+
+      ws.onclose = () => {
+        if (unmountedRef.current) return;
+
+        if (reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttemptRef.current++;
+          const delay = Math.min(
+            INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttemptRef.current - 1),
+            MAX_RECONNECT_DELAY
+          );
+          term.writeln(
+            `\r\n\x1b[1;33mDisconnected. Reconnecting in ${Math.round(delay / 1000)}s... (${reconnectAttemptRef.current}/${MAX_RECONNECT_ATTEMPTS})\x1b[0m`
+          );
+          reconnectTimerRef.current = setTimeout(connect, delay);
+        } else {
+          term.writeln("\r\n\x1b[1;31mConnection lost. Reload the page to retry.\x1b[0m");
+        }
+      };
+
+      ws.onerror = () => {
+        // onclose will handle reconnection
+      };
+    }
 
     const dataDisposable = term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(data);
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(data);
       }
     });
 
     const resizeDisposable = term.onResize(({ cols, rows }) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ cols, rows }));
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ cols, rows }));
       }
     });
 
-    // Re-fit on window resize
     const onWindowResize = () => {
       fit.fit();
     };
     window.addEventListener("resize", onWindowResize);
 
+    connect();
+
     return () => {
+      unmountedRef.current = true;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       window.removeEventListener("resize", onWindowResize);
       dataDisposable.dispose();
       resizeDisposable.dispose();
-      ws.close();
+      if (wsRef.current) wsRef.current.close();
       term.dispose();
     };
-  }, [machineId, machineName]);
+  }, [machineId, machineName, sessionName, autoCommand]);
 
   useImperativeHandle(ref, () => ({
     sendCommand: (command: string) => {

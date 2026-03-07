@@ -204,7 +204,7 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
           onClick={() =>
             runCommand({
               label: "Launch Claude Code",
-              command: "claude",
+              command: "claude --continue",
               icon: "🚀",
               group: "machine",
             })

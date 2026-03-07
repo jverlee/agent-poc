@@ -133,7 +133,7 @@ const MAX_SSH_RETRIES = 3;
 const SSH_RETRY_DELAY_MS = 2000;
 
 async function handleTerminalConnection(clientWs, query) {
-  const { machineId } = query;
+  const { machineId, sessionName, autoCommand } = query;
 
   if (!machineId) {
     clientWs.send("\x1b[1;31mMissing machineId\x1b[0m\r\n");
@@ -156,7 +156,7 @@ async function handleTerminalConnection(clientWs, query) {
 
   function connectSSH() {
     attempt++;
-    console.log(`[terminal] SSH connecting to ${ip} (attempt ${attempt}/${MAX_SSH_RETRIES})`);
+    console.log(`[terminal] SSH connecting to ${ip} (attempt ${attempt}/${MAX_SSH_RETRIES})${sessionName ? ` session=${sessionName}` : ""}`);
 
     sshConn = new Client();
 
@@ -193,6 +193,18 @@ async function handleTerminalConnection(clientWs, query) {
           }
           sshConn.end();
         });
+
+        // If sessionName is provided, attach to or create a tmux session
+        if (sessionName) {
+          const safeName = sessionName.replace(/[^a-zA-Z0-9_-]/g, "-");
+          // Install tmux if needed, then attach or create session.
+          // If the session is new and autoCommand is set, run it after tmux starts.
+          const escapedAutoCmd = autoCommand ? autoCommand.replace(/'/g, "'\\''") : "";
+          const tmuxScript = autoCommand
+            ? `command -v tmux >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq tmux; }; tmux set -t ${safeName} status off 2>/dev/null; if tmux has-session -t ${safeName} 2>/dev/null; then exec tmux attach-session -t ${safeName}; else tmux new-session -d -s ${safeName} && tmux set -t ${safeName} status off && tmux send-keys -t ${safeName} '${escapedAutoCmd}' Enter && exec tmux attach-session -t ${safeName}; fi`
+            : `command -v tmux >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq tmux; }; tmux set -t ${safeName} status off 2>/dev/null; if tmux has-session -t ${safeName} 2>/dev/null; then exec tmux attach-session -t ${safeName}; else tmux new-session -d -s ${safeName} && tmux set -t ${safeName} status off && exec tmux attach-session -t ${safeName}; fi`;
+          stream.write(tmuxScript + "\n");
+        }
 
         // Flush queued messages
         while (pendingMessages.length > 0) {
