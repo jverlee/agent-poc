@@ -31,12 +31,29 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       cursorBlink: true,
       fontFamily: "var(--font-geist-mono), monospace",
       fontSize: 14,
+      lineHeight: 1.5,
       scrollback: 5000,
       theme: {
         background: "#18181b",
-        foreground: "#e4e4e7",
-        cursor: "#e4e4e7",
-        selectionBackground: "#3f3f46",
+        foreground: "#d4d4d8",
+        cursor: "#a1a1aa",
+        selectionBackground: "#3f3f4680",
+        black: "#27272a",
+        brightBlack: "#52525b",
+        white: "#e4e4e7",
+        brightWhite: "#fafafa",
+        blue: "#60a5fa",
+        brightBlue: "#93c5fd",
+        cyan: "#67e8f9",
+        brightCyan: "#a5f3fc",
+        green: "#4ade80",
+        brightGreen: "#86efac",
+        red: "#f87171",
+        brightRed: "#fca5a5",
+        yellow: "#fbbf24",
+        brightYellow: "#fde68a",
+        magenta: "#c084fc",
+        brightMagenta: "#d8b4fe",
       },
     });
 
@@ -119,7 +136,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   return (
     <div
       ref={containerRef}
-      className="h-full w-full bg-[#18181b] p-2"
+      className="h-full w-full bg-[#18181b] p-3 rounded-md"
     />
   );
 });
