@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Terminal, { TerminalHandle } from "./Terminal";
-import TerminalInput from "./terminal-input";
 
 interface Tab {
   id: string;
@@ -99,6 +98,60 @@ export default function TabbedTerminal({
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [authCode, setAuthCode] = useState("");
   const [authStep, setAuthStep] = useState<"sign-in" | "paste-code">("sign-in");
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const uploadFileAndTypePath = useCallback(
+    async (file: File) => {
+      setUploading(true);
+      try {
+        const form = new FormData();
+        form.append("machineId", machineId);
+        form.append("file", file);
+        const res = await fetch("/api/upload", { method: "POST", body: form });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        const activeTerminal = terminalRefs.current.get(activeTabId);
+        if (activeTerminal) {
+          activeTerminal.typeText((data.path as string) + " ");
+        }
+      } catch (err) {
+        alert(`Upload failed: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setUploading(false);
+      }
+    },
+    [machineId, activeTabId]
+  );
+
+  const uploadAndSendPath = useCallback(
+    async (fileList: FileList) => {
+      for (const file of Array.from(fileList)) {
+        await uploadFileAndTypePath(file);
+      }
+    },
+    [uploadFileAndTypePath]
+  );
+
+  // Handle pasting images from clipboard
+  useEffect(() => {
+    function handlePaste(e: ClipboardEvent) {
+      if (!e.clipboardData) return;
+      const imageItem = Array.from(e.clipboardData.items).find(
+        (item) => item.type.startsWith("image/")
+      );
+      if (!imageItem) return; // let xterm handle text pastes
+      e.preventDefault();
+      e.stopPropagation();
+      const blob = imageItem.getAsFile();
+      if (!blob) return;
+      const ext = imageItem.type.split("/")[1] || "png";
+      const file = new File([blob], `pasted-image.${ext}`, { type: blob.type });
+      uploadFileAndTypePath(file);
+    }
+    document.addEventListener("paste", handlePaste, true);
+    return () => document.removeEventListener("paste", handlePaste, true);
+  }, [uploadFileAndTypePath]);
 
   // Persist tab state on changes
   useEffect(() => {
@@ -226,7 +279,26 @@ export default function TabbedTerminal({
       </div>
 
       {/* Terminal panels */}
-      <div className="min-h-0 flex-1 relative">
+      <div
+        className="min-h-0 flex-1 relative"
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          // Only trigger if leaving the container itself
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setDragOver(false);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          if (e.dataTransfer.files.length > 0) {
+            uploadAndSendPath(e.dataTransfer.files);
+          }
+        }}
+      >
         {authUrl && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-zinc-900/90 backdrop-blur-sm">
             <div className="flex flex-col items-center gap-4">
@@ -296,6 +368,16 @@ export default function TabbedTerminal({
             </div>
           </div>
         )}
+        {dragOver && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center border-2 border-dashed border-blue-500/50 bg-blue-500/10 pointer-events-none">
+            <span className="text-sm text-blue-400 font-medium">Drop file to insert path</span>
+          </div>
+        )}
+        {uploading && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-md bg-zinc-800 px-3 py-1.5 text-xs text-zinc-400 animate-pulse pointer-events-none">
+            Uploading...
+          </div>
+        )}
         {tabs.map((tab) => (
           <div
             key={tab.id}
@@ -315,16 +397,6 @@ export default function TabbedTerminal({
         ))}
       </div>
 
-      {/* Compose bar */}
-      <TerminalInput
-        machineId={machineId}
-        onSend={(text) => {
-          const activeTerminal = terminalRefs.current.get(activeTabId);
-          if (activeTerminal) {
-            activeTerminal.sendCommand(text);
-          }
-        }}
-      />
     </div>
   );
 }

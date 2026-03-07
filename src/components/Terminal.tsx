@@ -7,6 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 
 export interface TerminalHandle {
   sendCommand: (command: string) => void;
+  typeText: (text: string) => void;
 }
 
 interface TerminalProps {
@@ -188,6 +189,11 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     sendCommand: (command: string) => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && command) {
         wsRef.current.send(command + "\r");
+      }
+    },
+    typeText: (text: string) => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && text) {
+        wsRef.current.send(text);
       }
     },
   }));
