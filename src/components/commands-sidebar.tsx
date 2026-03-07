@@ -70,6 +70,7 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
   const [installingSkill, setInstallingSkill] = useState<string | null>(null);
   const [installingBrave, setInstallingBrave] = useState(false);
   const [allCommandsOpen, setAllCommandsOpen] = useState(false);
+  const [setupFlowOpen, setSetupFlowOpen] = useState(false);
 
   function runCommand(cmd: Command) {
     window.dispatchEvent(
@@ -180,55 +181,107 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
         Shortcuts
       </div>
 
-      {/* Setup Flow */}
+      {/* Code */}
       <div className="px-4 pt-3 pb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">
-        Setup Flow
+        Code
       </div>
       <div className="flex flex-col gap-1 px-3">
         <button
-          onClick={() => runCommand(installOpenclawCmd)}
+          onClick={() =>
+            runCommand({
+              label: "Install Claude Code",
+              command: "npm install -g @anthropic-ai/claude-code",
+              icon: "📦",
+              group: "machine",
+            })
+          }
           className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
-          <span className="w-5 text-center text-xs">{installOpenclawCmd.icon}</span>
-          <span>{installOpenclawCmd.label}</span>
+          <span className="w-5 text-center text-xs">📦</span>
+          <span>Install Claude Code</span>
         </button>
         <button
-          onClick={() => runCommand(applyModelCmd)}
+          onClick={() =>
+            runCommand({
+              label: "Launch Claude Code",
+              command: "claude",
+              icon: "🚀",
+              group: "machine",
+            })
+          }
           className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
-          <span className="w-5 text-center text-xs">{applyModelCmd.icon}</span>
-          <span>{applyModelCmd.label}</span>
+          <span className="w-5 text-center text-xs">🚀</span>
+          <span>Launch Claude Code</span>
         </button>
-        <button
-          onClick={handleInstallBrave}
-          disabled={installingBrave}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+      </div>
+
+      {/* Setup Flow */}
+      <button
+        onClick={() => setSetupFlowOpen((v) => !v)}
+        className="mx-4 mt-4 mb-1 flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+      >
+        <svg
+          className={`h-3.5 w-3.5 transition-transform ${setupFlowOpen ? "rotate-90" : ""}`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
         >
-          <span className="w-5 text-center text-xs">🔑</span>
-          <span>{installingBrave ? "Installing\u2026" : "Install Brave Search"}</span>
-          {installingBrave && (
-            <span className="ml-auto text-xs text-zinc-400 animate-pulse">...</span>
-          )}
-        </button>
-        {[
-          { label: "Install Skill 1", icon: "📦" },
-          { label: "Install Skill 2", icon: "📦" },
-          { label: "Install Skill 3", icon: "📦" },
-          { label: "Provision email", icon: "📧" },
-          { label: "Provision phone number", icon: "📱" },
-          { label: "Provision text number", icon: "💬" },
-          { label: "Welcome user (using text or phone)", icon: "👋" },
-        ].map((item) => (
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        Setup Flow
+      </button>
+
+      {setupFlowOpen && (
+        <div className="flex flex-col gap-1 px-3">
           <button
-            key={item.label}
-            onClick={() => alert("Not yet setup")}
+            onClick={() => runCommand(installOpenclawCmd)}
             className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
-            <span className="w-5 text-center text-xs">{item.icon}</span>
-            <span>{item.label}</span>
+            <span className="w-5 text-center text-xs">{installOpenclawCmd.icon}</span>
+            <span>{installOpenclawCmd.label}</span>
           </button>
-        ))}
-      </div>
+          <button
+            onClick={() => runCommand(applyModelCmd)}
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <span className="w-5 text-center text-xs">{applyModelCmd.icon}</span>
+            <span>{applyModelCmd.label}</span>
+          </button>
+          <button
+            onClick={handleInstallBrave}
+            disabled={installingBrave}
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <span className="w-5 text-center text-xs">🔑</span>
+            <span>{installingBrave ? "Installing\u2026" : "Install Brave Search"}</span>
+            {installingBrave && (
+              <span className="ml-auto text-xs text-zinc-400 animate-pulse">...</span>
+            )}
+          </button>
+          {[
+            { label: "Install Skill 1", icon: "📦" },
+            { label: "Install Skill 2", icon: "📦" },
+            { label: "Install Skill 3", icon: "📦" },
+            { label: "Provision email", icon: "📧" },
+            { label: "Provision phone number", icon: "📱" },
+            { label: "Provision text number", icon: "💬" },
+            { label: "Welcome user (using text or phone)", icon: "👋" },
+          ].map((item) => (
+            <button
+              key={item.label}
+              onClick={() => alert("Not yet setup")}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <span className="w-5 text-center text-xs">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* All Commands (collapsible, collapsed by default) */}
       <button
