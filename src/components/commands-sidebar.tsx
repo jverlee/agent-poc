@@ -190,7 +190,7 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
           onClick={() =>
             runCommand({
               label: "Install Claude Code",
-              command: "npm install -g @anthropic-ai/claude-code",
+              command: "curl -fsSL https://claude.ai/install.sh | bash",
               icon: "📦",
               group: "machine",
             })
