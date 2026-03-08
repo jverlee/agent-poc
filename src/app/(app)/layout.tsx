@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { SidebarWithModal } from "@/components/sidebar-with-modal";
 import { RightSidebar } from "@/components/right-sidebar";
+import { TerminalPanel } from "@/components/terminal-panel";
 import { StatusProvider } from "@/components/status-provider";
 import { LogoutButton } from "@/components/logout-button";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
@@ -63,7 +64,8 @@ export default async function AppLayout({
             </div>
           </div>
         </nav>
-        <main className="flex-1 overflow-y-auto p-8">{children}</main>
+        <TerminalPanel machines={machines} />
+        <main className="min-w-0 flex-1 overflow-y-auto p-8">{children}</main>
         <RightSidebar machines={machines} />
       </div>
     </StatusProvider>
