@@ -116,7 +116,7 @@ function getSSHConfig(ip) {
   return {
     host: ip,
     port: 22,
-    username: process.env.SSH_USER || "root",
+    username: process.env.SSH_USER || "workspace",
     privateKey: readFileSync(resolved),
   };
 }

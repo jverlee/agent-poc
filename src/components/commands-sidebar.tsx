@@ -170,7 +170,7 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
 
   const applyModelCmd: Command = {
     label: "Apply Model",
-    command: `sed -i '/^OPENROUTER_/d' /root/.openclaw/.env 2>/dev/null; printf 'OPENROUTER_API_KEY=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\\nOPENROUTER_MODEL=moonshotai/kimi-k2.5\\n' >> /root/.openclaw/.env && echo "Model applied: moonshotai/kimi-k2.5"`,
+    command: `sed -i '/^OPENROUTER_/d' ~/.openclaw/.env 2>/dev/null; printf 'OPENROUTER_API_KEY=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\\nOPENROUTER_MODEL=moonshotai/kimi-k2.5\\n' >> ~/.openclaw/.env && echo "Model applied: moonshotai/kimi-k2.5"`,
     icon: "🤖",
     group: "openclaw",
   };

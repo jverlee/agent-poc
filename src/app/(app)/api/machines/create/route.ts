@@ -64,12 +64,25 @@ export async function POST(request: NextRequest) {
         // 2. Create the droplet
         send({ step: "droplet", status: "in_progress" });
         const image = "ubuntu-24-04-x64";
+        const userData = [
+          "#!/bin/bash",
+          "set -ex",
+          // Allow workspace user to traverse /root to reach /root/workspace
+          "chmod o+x /root",
+          "useradd -m -d /root/workspace -s /bin/bash workspace",
+          "mkdir -p /root/workspace/.ssh",
+          "cp /root/.ssh/authorized_keys /root/workspace/.ssh/authorized_keys",
+          "chown -R workspace:workspace /root/workspace",
+          "chmod 700 /root/workspace/.ssh",
+          "chmod 600 /root/workspace/.ssh/authorized_keys",
+        ].join("\n");
         const droplet = await createDroplet({
           name,
           region,
           size,
           image,
           sshKeyIds: [sshKeyId],
+          userData,
         });
         send({ step: "droplet", status: "done" });
 
@@ -112,16 +125,27 @@ export async function POST(request: NextRequest) {
         } else {
           send({ step: "saving", status: "done" });
 
-          // 6. Wait for SSH connectivity
+          // 6. Wait for SSH connectivity (root comes up first, then workspace after cloud-init)
           send({ step: "ssh", status: "in_progress" });
           let sshReady = false;
           for (let i = 0; i < 20; i++) {
-            sshReady = await checkSSHConnectivity(publicIp);
+            sshReady = await checkSSHConnectivity(publicIp, "root");
             if (sshReady) break;
             await new Promise((r) => setTimeout(r, 3000));
           }
           if (sshReady) {
-            send({ step: "ssh", status: "done" });
+            // Wait for cloud-init to finish creating the workspace user
+            let workspaceReady = false;
+            for (let i = 0; i < 15; i++) {
+              workspaceReady = await checkSSHConnectivity(publicIp);
+              if (workspaceReady) break;
+              await new Promise((r) => setTimeout(r, 2000));
+            }
+            if (workspaceReady) {
+              send({ step: "ssh", status: "done" });
+            } else {
+              send({ step: "ssh", status: "error", error: "Workspace user setup timed out" });
+            }
           } else {
             send({ step: "ssh", status: "error", error: "SSH connection timed out" });
           }

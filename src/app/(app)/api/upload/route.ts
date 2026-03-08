@@ -24,11 +24,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const conn = await createSSHConnection(machine.ip);
-    const remotePath = `/root/uploads/${file.name}`;
+    const remotePath = `uploads/${file.name}`;
 
     // Ensure uploads directory exists
     await new Promise<void>((resolve, reject) => {
-      conn.exec("mkdir -p /root/uploads", (err, stream) => {
+      conn.exec("mkdir -p ~/uploads", (err, stream) => {
         if (err) return reject(err);
         stream.on("data", () => {});
         stream.stderr.on("data", () => {});
