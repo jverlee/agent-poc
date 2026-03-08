@@ -140,7 +140,7 @@ export default function TabbedTerminal({
       const imageItem = Array.from(e.clipboardData.items).find(
         (item) => item.type.startsWith("image/")
       );
-      if (!imageItem) return; // let xterm handle text pastes
+      if (!imageItem) return; // let hterm handle text pastes
       e.preventDefault();
       e.stopPropagation();
       const blob = imageItem.getAsFile();
