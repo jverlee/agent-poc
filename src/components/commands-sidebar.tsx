@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import type { Machine } from "@/lib/supabase/machines";
+import { StatusBadge } from "@/components/status-badge";
+import { useStatuses } from "@/components/status-provider";
 
 interface Command {
   label: string;
@@ -60,10 +62,64 @@ const skills: Skill[] = [
   { label: "Add DevOps Monitor Skill", slug: "agentic-devops", icon: "🛠️" },
 ];
 
+function formatMemory(mb: number): string {
+  if (mb >= 1024) {
+    const gb = mb / 1024;
+    return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`;
+  }
+  return `${mb} MB`;
+}
+
 export function CommandsSidebar({ machines }: { machines: Machine[] }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const machineId = searchParams.get("machine") || machines[0]?.id || "";
+  const machine = machines.find((m) => m.id === machineId);
+
+  const { setMachineStatus } = useStatuses();
+  const [machineState, setMachineState] = useState<string | null>(null);
+  const [machineSpecs, setMachineSpecs] = useState<{
+    cpus: number | null;
+    cpuKind: string | null;
+    memoryMb: number | null;
+  }>({ cpus: null, cpuKind: null, memoryMb: null });
+
+  const fetchStatus = useCallback(async () => {
+    if (!machine?.enabled || !machineId) return;
+    try {
+      const res = await fetch("/api/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ machineId }),
+      });
+      const data = await res.json();
+      if (data.state) {
+        setMachineState(data.state);
+        setMachineStatus(machineId, data.state);
+      }
+      if (data.cpus != null) {
+        setMachineSpecs({
+          cpus: data.cpus,
+          cpuKind: data.cpuKind,
+          memoryMb: data.memoryMb,
+        });
+      }
+    } catch {
+      // silently ignore polling errors
+    }
+  }, [machineId, machine?.enabled, setMachineStatus]);
+
+  useEffect(() => {
+    setMachineState(null);
+    setMachineSpecs({ cpus: null, cpuKind: null, memoryMb: null });
+    if (machine?.enabled) {
+      fetchStatus();
+      const interval = setInterval(fetchStatus, 5000);
+      return () => clearInterval(interval);
+    } else if (machine) {
+      setMachineState("disabled");
+    }
+  }, [machineId, machine?.enabled, fetchStatus]);
 
   const [restarting, setRestarting] = useState(false);
   const [destroying, setDestroying] = useState(false);
@@ -177,6 +233,36 @@ export function CommandsSidebar({ machines }: { machines: Machine[] }) {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
+      {/* Machine info */}
+      {machine && (
+        <div className="border-b border-zinc-200 px-4 py-4 dark:border-zinc-800">
+          <div className="flex items-center gap-3">
+            <div className="relative shrink-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-200 text-sm font-semibold text-zinc-700 ring-2 ring-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:ring-zinc-700">
+                {machine.name.charAt(0).toUpperCase()}
+              </div>
+              <StatusBadge state={machineState} size="sm" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                {machine.name}
+              </div>
+              {machine.role && (
+                <div className="truncate text-xs text-zinc-500">{machine.role}</div>
+              )}
+              <div className="text-xs text-zinc-400">
+                {machine.ip || "No IP assigned"}
+              </div>
+              {machineSpecs.cpus != null && machineSpecs.memoryMb != null && (
+                <div className="text-xs text-zinc-500">
+                  {machineSpecs.cpus} {machineSpecs.cpuKind ?? ""} vCPU{machineSpecs.cpus > 1 ? "s" : ""} · {formatMemory(machineSpecs.memoryMb)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
         Shortcuts
       </div>

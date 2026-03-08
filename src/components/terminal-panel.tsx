@@ -17,7 +17,7 @@ function TerminalPanelInner({ machines }: { machines: Machine[] }) {
 
   return (
     <aside
-      className={`relative flex shrink-0 border-r border-zinc-200 bg-zinc-50 transition-all duration-200 dark:border-zinc-800 dark:bg-zinc-900 ${collapsed ? "w-0 overflow-hidden" : "w-[40rem]"}`}
+      className={`relative flex shrink-0 border-r border-zinc-200 bg-zinc-50 transition-all duration-200 dark:border-zinc-800 dark:bg-zinc-900 overflow-visible ${collapsed ? "w-0" : "w-[30rem]"}`}
     >
       <button
         onClick={() => setCollapsed(!collapsed)}
@@ -26,32 +26,33 @@ function TerminalPanelInner({ machines }: { machines: Machine[] }) {
       >
         {collapsed ? "\u203A" : "\u2039"}
       </button>
-      {!collapsed && (
-        <div className="flex h-full w-[40rem] flex-col">
-          <div className="shrink-0 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-            <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              SSH Terminal
-            </h2>
-          </div>
-          <div className="min-h-0 flex-1">
-            {enabledMachines.map((m) => (
-              <div
-                key={m.id}
-                className="h-full w-full"
-                style={{
-                  display: m.id === machineId ? "block" : "none",
-                }}
-              >
-                <TabbedTerminal
-                  machineId={m.id}
-                  machineName={m.name}
-                  isActive={m.id === machineId}
-                />
-              </div>
-            ))}
-          </div>
+      <div
+        className="flex h-full w-[30rem] flex-col"
+        style={{ display: collapsed ? "none" : undefined }}
+      >
+        <div className="shrink-0 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <h2 className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            SSH Terminal
+          </h2>
         </div>
-      )}
+        <div className="min-h-0 flex-1">
+          {enabledMachines.map((m) => (
+            <div
+              key={m.id}
+              className="h-full w-full"
+              style={{
+                display: m.id === machineId ? "block" : "none",
+              }}
+            >
+              <TabbedTerminal
+                machineId={m.id}
+                machineName={m.name}
+                isActive={m.id === machineId}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
     </aside>
   );
 }
