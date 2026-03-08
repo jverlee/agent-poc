@@ -65,7 +65,7 @@ export default async function AppLayout({
           </div>
         </nav>
         <TerminalPanel machines={machines} />
-        <main className="min-w-0 flex-1 overflow-y-auto p-8">{children}</main>
+        <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
         <RightSidebar machines={machines} />
       </div>
     </StatusProvider>

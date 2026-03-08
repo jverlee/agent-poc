@@ -5,7 +5,7 @@ import { CommandsSidebar } from "./commands-sidebar";
 import type { Machine } from "@/lib/supabase/machines";
 
 export function RightSidebar({ machines }: { machines: Machine[] }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   return (
     <aside className="relative flex shrink-0 border-l border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">

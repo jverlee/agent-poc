@@ -98,7 +98,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
         prefs.set("foreground-color", "#d4d4d8");
         prefs.set("cursor-color", "rgba(161, 161, 170, 0.5)");
         prefs.set("cursor-blink", true);
-        prefs.set("font-family", "var(--font-geist-mono), 'Menlo', monospace");
+        prefs.set("font-family", "Arial, sans-serif");
         prefs.set("font-size", 14);
         prefs.set("color-palette-overrides", HTERM_COLORS);
         prefs.set("enable-bold", true);
