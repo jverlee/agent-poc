@@ -1,9 +1,6 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { Terminal as XTerm } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import "@xterm/xterm/css/xterm.css";
 
 export interface TerminalHandle {
   sendCommand: (command: string) => void;
@@ -29,60 +26,136 @@ function stripAnsi(str: string): string {
 
 const AUTH_URL_PATTERN = /https:\/\/claude\.ai\/oauth\/authorize[^\s\x1b]*/;
 
+// hterm theme colors matching the zinc dark theme
+const HTERM_COLORS = [
+  "#27272a", // 0: black
+  "#f87171", // 1: red
+  "#4ade80", // 2: green
+  "#fbbf24", // 3: yellow
+  "#60a5fa", // 4: blue
+  "#c084fc", // 5: magenta
+  "#67e8f9", // 6: cyan
+  "#e4e4e7", // 7: white
+  "#52525b", // 8: bright black
+  "#fca5a5", // 9: bright red
+  "#86efac", // 10: bright green
+  "#fde68a", // 11: bright yellow
+  "#93c5fd", // 12: bright blue
+  "#d8b4fe", // 13: bright magenta
+  "#a5f3fc", // 14: bright cyan
+  "#fafafa", // 15: bright white
+];
+
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   { machineId, machineName, isActive = true, sessionName, autoCommand, onAuthUrl },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<XTerm | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
+  const htermRef = useRef<any>(null);
+  const ioRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const unmountedRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const authBufferRef = useRef("");
+  const readyRef = useRef(false);
 
   useEffect(() => {
     unmountedRef.current = false;
     if (!containerRef.current) return;
 
-    const term = new XTerm({
-      cursorBlink: true,
-      fontFamily: "var(--font-geist-mono), monospace",
-      fontSize: 14,
-      lineHeight: 1.5,
-      scrollback: 5000,
-      theme: {
-        background: "#18181b",
-        foreground: "#d4d4d8",
-        cursor: "#a1a1aa",
-        selectionBackground: "#3f3f4680",
-        black: "#27272a",
-        brightBlack: "#52525b",
-        white: "#e4e4e7",
-        brightWhite: "#fafafa",
-        blue: "#60a5fa",
-        brightBlue: "#93c5fd",
-        cyan: "#67e8f9",
-        brightCyan: "#a5f3fc",
-        green: "#4ade80",
-        brightGreen: "#86efac",
-        red: "#f87171",
-        brightRed: "#fca5a5",
-        yellow: "#fbbf24",
-        brightYellow: "#fde68a",
-        magenta: "#c084fc",
-        brightMagenta: "#d8b4fe",
-      },
-    });
+    // Dynamically import hterm (it uses globals and can't be imported at module level in SSR)
+    let cancelled = false;
 
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.open(containerRef.current);
-    fit.fit();
+    async function init() {
+      // @ts-expect-error hterm-umdjs has no type declarations
+      const htermAll = await import("hterm-umdjs");
+      if (cancelled) return;
 
-    termRef.current = term;
-    fitRef.current = fit;
+      const { hterm, lib } = htermAll;
+
+      // Wait for lib.init if needed
+      await new Promise<void>((resolve) => {
+        if (lib.init) {
+          lib.init(resolve);
+        } else {
+          resolve();
+        }
+      });
+      if (cancelled) return;
+
+      // Disable default new window behavior
+      hterm.defaultStorage = new lib.Storage.Memory();
+
+      const term = new hterm.Terminal();
+
+      term.onTerminalReady = () => {
+        if (cancelled) return;
+
+        // Apply theme/preferences
+        const prefs = term.getPrefs();
+        prefs.set("background-color", "#18181b");
+        prefs.set("foreground-color", "#d4d4d8");
+        prefs.set("cursor-color", "rgba(161, 161, 170, 0.5)");
+        prefs.set("cursor-blink", true);
+        prefs.set("font-family", "var(--font-geist-mono), 'Menlo', monospace");
+        prefs.set("font-size", 14);
+        prefs.set("color-palette-overrides", HTERM_COLORS);
+        prefs.set("enable-bold", true);
+        prefs.set("enable-blink", true);
+        prefs.set("scroll-on-output", true);
+        prefs.set("scroll-on-keystroke", true);
+        prefs.set("audible-bell-sound", "");
+        prefs.set("receive-encoding", "utf-8");
+        prefs.set("send-encoding", "utf-8");
+        prefs.set("enable-clipboard-notice", false);
+        prefs.set("copy-on-select", false);
+        prefs.set("use-default-window-copy", true);
+        prefs.set("ctrl-plus-minus-zero-zoom", false);
+        prefs.set("ctrl-c-copy", true);
+        prefs.set("ctrl-v-paste", true);
+
+        const io = term.io.push();
+        ioRef.current = io;
+
+        io.onVTKeystroke = (str: string) => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(str);
+          }
+        };
+
+        io.sendString = (str: string) => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(str);
+          }
+        };
+
+        io.onTerminalResize = (cols: number, rows: number) => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ cols, rows }));
+          }
+        };
+
+        htermRef.current = term;
+        readyRef.current = true;
+
+        connect();
+      };
+
+      term.decorate(containerRef.current);
+      term.installKeyboard();
+
+      // Style the iframe that hterm creates to remove borders and fit
+      const iframe = containerRef.current?.querySelector("iframe");
+      if (iframe) {
+        iframe.style.position = "absolute";
+        iframe.style.top = "0";
+        iframe.style.left = "0";
+        iframe.style.width = "100%";
+        iframe.style.height = "100%";
+        iframe.style.border = "none";
+      }
+    }
 
     function buildWsUrl() {
       const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -92,12 +165,18 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       return url;
     }
 
+    function writeToTerminal(text: string) {
+      if (ioRef.current) {
+        ioRef.current.print(text);
+      }
+    }
+
     function connect() {
       if (unmountedRef.current) return;
 
       const isReconnect = reconnectAttemptRef.current > 0;
       if (!isReconnect) {
-        term.writeln(`\x1b[1;36mConnecting to ${machineName}...\x1b[0m`);
+        writeToTerminal(`\x1b[1;36mConnecting to ${machineName}...\x1b[0m\r\n`);
       }
 
       const ws = new WebSocket(buildWsUrl());
@@ -106,19 +185,25 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       ws.onopen = () => {
         reconnectAttemptRef.current = 0;
         if (isReconnect) {
-          term.writeln("\x1b[1;32mReconnected\x1b[0m");
+          writeToTerminal("\x1b[1;32mReconnected\x1b[0m\r\n");
         } else {
-          term.writeln("\x1b[1;32mConnected\x1b[0m");
+          writeToTerminal("\x1b[1;32mConnected\x1b[0m\r\n");
         }
-        ws.send(JSON.stringify({ cols: term.cols, rows: term.rows }));
+
+        const term = htermRef.current;
+        if (term) {
+          const cols = term.screenSize?.width || 80;
+          const rows = term.screenSize?.height || 24;
+          ws.send(JSON.stringify({ cols, rows }));
+        }
       };
 
       ws.onmessage = (event) => {
-        term.write(event.data);
+        writeToTerminal(event.data);
+
         if (onAuthUrl) {
           const text = typeof event.data === "string" ? event.data : "";
           authBufferRef.current += text;
-          // Keep buffer from growing unbounded (last 4KB is plenty)
           if (authBufferRef.current.length > 4096) {
             authBufferRef.current = authBufferRef.current.slice(-4096);
           }
@@ -126,7 +211,6 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
           const match = clean.match(AUTH_URL_PATTERN);
           if (match) {
             onAuthUrl(match[0]);
-            // Clear buffer so we don't re-match endlessly
             authBufferRef.current = "";
           }
         }
@@ -141,12 +225,12 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
             INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttemptRef.current - 1),
             MAX_RECONNECT_DELAY
           );
-          term.writeln(
-            `\r\n\x1b[1;33mDisconnected. Reconnecting in ${Math.round(delay / 1000)}s... (${reconnectAttemptRef.current}/${MAX_RECONNECT_ATTEMPTS})\x1b[0m`
+          writeToTerminal(
+            `\r\n\x1b[1;33mDisconnected. Reconnecting in ${Math.round(delay / 1000)}s... (${reconnectAttemptRef.current}/${MAX_RECONNECT_ATTEMPTS})\x1b[0m\r\n`
           );
           reconnectTimerRef.current = setTimeout(connect, delay);
         } else {
-          term.writeln("\r\n\x1b[1;31mConnection lost. Reload the page to retry.\x1b[0m");
+          writeToTerminal("\r\n\x1b[1;31mConnection lost. Reload the page to retry.\x1b[0m\r\n");
         }
       };
 
@@ -155,33 +239,23 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       };
     }
 
-    const dataDisposable = term.onData((data) => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(data);
-      }
-    });
-
-    const resizeDisposable = term.onResize(({ cols, rows }) => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ cols, rows }));
-      }
-    });
-
-    const onWindowResize = () => {
-      fit.fit();
-    };
-    window.addEventListener("resize", onWindowResize);
-
-    connect();
+    init();
 
     return () => {
+      cancelled = true;
       unmountedRef.current = true;
+      readyRef.current = false;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      window.removeEventListener("resize", onWindowResize);
-      dataDisposable.dispose();
-      resizeDisposable.dispose();
       if (wsRef.current) wsRef.current.close();
-      term.dispose();
+      if (htermRef.current) {
+        try {
+          htermRef.current.uninstallKeyboard();
+        } catch {
+          // ignore
+        }
+      }
+      htermRef.current = null;
+      ioRef.current = null;
     };
   }, [machineId, machineName, sessionName, autoCommand]);
 
@@ -198,16 +272,11 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     },
   }));
 
-  useEffect(() => {
-    if (isActive && fitRef.current) {
-      fitRef.current.fit();
-    }
-  }, [isActive]);
-
   return (
     <div
       ref={containerRef}
-      className="h-full w-full bg-[#18181b] p-3 rounded-md"
+      className="h-full w-full bg-[#18181b] rounded-md"
+      style={{ position: "relative", overflow: "hidden" }}
     />
   );
 });

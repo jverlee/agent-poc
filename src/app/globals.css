@@ -25,31 +25,21 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Modern xterm styling */
-.xterm {
-  padding: 8px;
+/* hterm styling */
+iframe.hterminal {
+  border: none !important;
 }
 
-.xterm-viewport {
-  background-color: #18181b !important;
-  scrollbar-width: thin;
-  scrollbar-color: #3f3f46 transparent;
-}
-
-.xterm-viewport::-webkit-scrollbar {
+/* Style hterm scrollbar via the iframe's host container */
+[class*="terminal"] ::-webkit-scrollbar {
   width: 6px;
 }
 
-.xterm-viewport::-webkit-scrollbar-track {
+[class*="terminal"] ::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.xterm-viewport::-webkit-scrollbar-thumb {
+[class*="terminal"] ::-webkit-scrollbar-thumb {
   background: #3f3f46;
   border-radius: 3px;
-}
-
-.xterm-screen canvas {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
