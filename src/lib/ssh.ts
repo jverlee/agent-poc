@@ -17,7 +17,7 @@ export function getSSHConfig(ip: string) {
   return {
     host: ip,
     port: 22,
-    username: process.env.SSH_USER || "root",
+    username: process.env.SSH_USER || "workspace",
     privateKey: getPrivateKey(),
   };
 }
@@ -70,10 +70,15 @@ export async function execSSHCommand(
 
 /**
  * Quick SSH connectivity check. Returns true if we can connect.
+ * Optionally override the username (e.g. "root" for initial provisioning checks).
  */
-export async function checkSSHConnectivity(ip: string): Promise<boolean> {
+export async function checkSSHConnectivity(ip: string, username?: string): Promise<boolean> {
   try {
-    const conn = await createSSHConnection(ip);
+    const config = username ? { ...getSSHConfig(ip), username } : getSSHConfig(ip);
+    const conn = await new Promise<Client>((resolve, reject) => {
+      const c = new Client();
+      c.on("ready", () => resolve(c)).on("error", (err) => reject(err)).connect(config);
+    });
     conn.end();
     return true;
   } catch {

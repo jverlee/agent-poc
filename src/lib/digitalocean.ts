@@ -112,16 +112,21 @@ export async function createDroplet(params: {
   size: string;
   image: string;
   sshKeyIds: number[];
+  userData?: string;
 }): Promise<{ id: number; name: string; networks: { v4: { ip_address: string; type: string }[] } }> {
+  const body: Record<string, unknown> = {
+    name: params.name,
+    region: params.region,
+    size: params.size,
+    image: params.image,
+    ssh_keys: params.sshKeyIds,
+  };
+  if (params.userData) {
+    body.user_data = params.userData;
+  }
   const data = await doFetch("/droplets", {
     method: "POST",
-    body: JSON.stringify({
-      name: params.name,
-      region: params.region,
-      size: params.size,
-      image: params.image,
-      ssh_keys: params.sshKeyIds,
-    }),
+    body: JSON.stringify(body),
   });
   return data.droplet;
 }

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Write the file on the remote machine via SSH
-    const destDir = `/root/.openclaw/skills/${skill}`;
+    const destDir = `$HOME/.openclaw/skills/${skill}`;
     const destFile = `${destDir}/SKILL.md`;
     const command = `mkdir -p ${destDir} && cat > ${destFile} << 'SKILLEOF'\n${content}\nSKILLEOF`;
 
