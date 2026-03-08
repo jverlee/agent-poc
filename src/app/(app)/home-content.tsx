@@ -2,13 +2,10 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import dynamic from "next/dynamic";
 import ConnectionForm from "@/components/ConnectionForm";
 import { StatusBadge } from "@/components/status-badge";
 import { useStatuses } from "@/components/status-provider";
 import type { Machine } from "@/lib/supabase/machines";
-
-const TabbedTerminal = dynamic(() => import("@/components/TabbedTerminal"), { ssr: false });
 
 function HomeInner({ machines }: { machines: Machine[] }) {
   const searchParams = useSearchParams();
@@ -101,23 +98,18 @@ function HomeInner({ machines }: { machines: Machine[] }) {
       </div>
       <div className="min-h-0 flex-1">
         {machine.enabled ? (
-          machines
-            .filter((m) => m.enabled)
-            .map((m) => (
-              <div
-                key={m.id}
-                className="h-full w-full"
-                style={{
-                  display: m.id === machineId ? "block" : "none",
-                }}
-              >
-                <TabbedTerminal
-                  machineId={m.id}
-                  machineName={m.name}
-                  isActive={m.id === machineId}
-                />
-              </div>
-            ))
+          machine.ip ? (
+            <iframe
+              src={`http://${machine.ip}:3000`}
+              className="h-full w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-700"
+              title={`${machine.name} — port 3000`}
+              allow="clipboard-read; clipboard-write"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-zinc-500">
+              <p>Waiting for IP assignment to load preview...</p>
+            </div>
+          )
         ) : (
           <div className="flex h-full items-center justify-center text-zinc-500">
             <p>This machine is not currently available.</p>
